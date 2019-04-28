@@ -1,21 +1,21 @@
-﻿Collection Code,Collection Key,Location Code,Location Key,Shell Substrate Notes Code,Shell Substrate Notes Key
-ANSP,Academy of Natural Sciences of Drexel University,ANA,Anacapa Island,ALG,Algae
-CAS,California Academy of Sciences,BS,Big Sur,BAR,Barnacles
-iNat,iNaturalist,CAT,Santa Catalina Island,BOR_INC,Incomplete Borehole
-LACM-M,"Natural History Museum of Los Angeles, Malacology ",LA,Los Angeles,BOR_STR,Straight Borehole
-LACM-M-IP,"Natural History Museum of Los Angeles, Malacology - Invertebrate Palentology",MB,Morro Bay,BOR_TAP,Tapered Borehole
-MCZ,"Museum of Comparative Zoology, Harvard University",MO,Monterey Bay,BRY,Bryozoans
-PR,Personal Research,NBC,Northern Baja California,CCA,Coraline crust
-SBNHM,Santa Barbara Museum of Natural History,NLA,North LA,LMP,Limpet
-SIO,Scripps Institution of Oceanography Collections,SB,Santa Barbara,SCR,Scarring
-,,SBC,Southern Baja California,TWS,Tube Worm Shells
-,,SBI,Santa Barbara Island,,
-,,SCI,Santa Clemente Island,,
-,,SCZI,Santa Cruz Island,,
-,,SD,San Diego,,
-,,SLA,South LA,,
-,,SMI,Santa Miguel Island,,
-,,SNI,San Nicolas Island,,
-,,SO,Sonoma,,
-,,SRI,Santa Rosa Island,,
-,,SM,San Mateo,,
+﻿Collection Code,Collection Key,No. Specimens (Raw Data),Location Code,No. Specimens (Raw Data),Location Key,Shell Substrate Notes Code,Shell Substrate Notes Key
+ANSP,Academy of Natural Sciences of Drexel University,27,ANA,50,Anacapa Island,ALG,Algae
+CAS,California Academy of Sciences,301,BS,2,Big Sur,BAR,Barnacles
+iNat,iNaturalist,99,CAT,431,Santa Catalina Island,BOR_INC,Incomplete Borehole
+LACM-M,"Natural History Museum of Los Angeles, Malacology ",1272,LA,843,Los Angeles,BOR_STR,Straight Borehole
+LACM-M-IP,"Natural History Museum of Los Angeles, Malacology - Invertebrate Palentology",331,MB,60,Morro Bay,BOR_TAP,Tapered Borehole
+MCZ,"Museum of Comparative Zoology, Harvard University",199,MO,42,Monterey Bay,BRY,Bryozoans
+PR,Personal Research,474,NBC,170,Northern Baja California,CCA,Coraline crust
+SBNHM,Santa Barbara Museum of Natural History,274,NLA,41,North LA,LMP,Limpet
+SIO,Scripps Institution of Oceanography Collections,19,SB,92,Santa Barbara,SCR,Scarring
+,,,SBC,57,Southern Baja California,TWS,Tube Worm Shells
+,,,SBI,32,Santa Barbara Island,,
+,,,SCI,52,Santa Clemente Island,,
+,,,SCZI,150,Santa Cruz Island,,
+,,,SD,527,San Diego,,
+,,,SLA,277,South LA,,
+,,,SM,5,San Mateo,,
+,,,SMI,24,Santa Miguel Island,,
+,,,SNI,31,San Nicolas Island,,
+,,,SO,5,Sonoma,,
+,,,SRI,105,Santa Rosa Island,,
