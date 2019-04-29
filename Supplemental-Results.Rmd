@@ -1,24 +1,24 @@
 ---
 title: "Spatiotemporal Variation of Adult C. californicus Shell Allometry"
 author: "Malloy and Ul-Hasan and Lewis et al"
-date: "Apr 9, 2019"
+date: "Apr 28, 2019"
 output:
   word_document: default
   pdf_document: default
 ---
 
-Last edited [Sabah Ul-Hasan]: April 9, 2019
+Last edited [Sabah Ul-Hasan]: April 28, 2019
 
 https://github.com/MichaelMalloy/C_californicus_Morphology
 
 Contributors of data by order of contribution: MM, SUH, CAO, SC
 Contributors of code by order of contribution: SUH, LL, MM
 
-SuppTabs 2-4    Data, post-processing: Raw -> Clean -> SoCal  Lines 22 - 144
-Figure 1a-b     Map of C. californicus range                  Lines 146 - 260
-Figure 2b       Shell allometry (shell manual)                Lines 262 - 302
-Supp Fig 1      Correlates for shell collection bias          Lines 304 - 331
-Figure 3        Bergmann's rule: Morphology ~ temperature     Lines 333 -
+SuppTabs 2-4    Data, post-processing: Raw -> Clean -> SoCal  Lines 24 - 146
+Figure 1a-b     Map of C. californicus range                  Lines 148 - 262
+Figure 2b       Shell allometry (shell manual)                Lines 264 - 304
+Supp Fig 1      Correlates for shell collection bias          Lines 306 - 333
+Figure 3a-d     Bergmann's rule: Morphology ~ temp ~ lat      Lines 335 - 486
 Figure 4        Major factors ~ Morphology (SoCal)            Lines
 
 Overview of data and post-processing
@@ -280,9 +280,9 @@ my_fn <- function(data, mapping, ...){
 }
 
 # Subset data
-Fig2 = Clean[,c("Epoch", "Globosity_WoverL", "Length_mm", "Width_mm", "Mean_SST")] 
+Fig2 = Clean[,c("Epoch", "Length_mm", "Width_mm", "Globosity_WoverL")] 
 # Rename columns
-names(Fig2) = c("Epoch", "Globosity", "Length", "Width", "Mean SST") 
+names(Fig2) = c("Epoch", "Length", "Width", "Globosity") 
 # Create figure (automatically excludes NAs)
 Fig2_chart = ggpairs(Fig2, aes(color = Epoch, alpha = 0.85), lower = list(continuous = my_fn), upper = list(continuous = wrap("cor", size = 4.25)))
 # Change colors manually with a loop through each plot
@@ -389,20 +389,39 @@ locations = c("SM", "MB", "MO", "BS", "SO", "SB", "NLA", "LA", "SLA", "SD", "NBC
 # Southern islands "SCI","SNI","SBI","CAT"
 Clean$Location = factor(Clean$Location, levels=locations) # order locations
 
+# Retrieval of regression and p-value from ggplot2
+ggplotRegression <- function (fit) {
+
+require(ggplot2)
+
+ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red") +
+  labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                     "Intercept =",signif(fit$coef[[1]],5 ),
+                     " Slope =",signif(fit$coef[[2]], 5),
+                     " P =",signif(summary(fit)$coef[2,4], 5)))
+}
+
+# Figures
 Figure3a = ggplot(data = Clean, 
-                      aes(x = Latitude, y = Mean_SST,
+                      aes(x = Mean_SST, y = Length_mm,
                       color = Epoch)) +
   scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) +
-  annotate("rect",ymin=-Inf,ymax=Inf,xmin=32.56,xmax=34.49, # adjust by transformation
-            alpha=0.3, fill="red") + # shade square
   geom_point() +
     geom_smooth() + # default of 95% confidence
+  geom_smooth(se = FALSE, method = lm) +
     geom_smooth(method = lm, color = "black") + # 95% confidence
   theme(axis.line = element_line(colour = "black", size = 0.25)) +
-  labs(x="Latitude", y="Mean SST")
+  labs(x="Mean SST", y="Size (Length, mm)")
 Figure3a +
   theme_classic()
-ggsave("Figure3a_Data-Clean_Latitude-MeanSST.png", dpi = 800)
+ggsave("Figure3a_Data-Clean_MeanSST-Size.png", dpi = 800)
+ggplotRegression(lm(Length_mm ~ Mean_SST, data = Clean))
+# y = 19.845 - 0.055x, r^2 = 0.000, p = 0.449
+# ** Anthropocene: y = 13.552 + 0.327x, r^2 = 0.003, p = 0.016
+# ** Holocene: y = 51.833 - 1.993x, r^2 = 0.102, p = 1.086 x 10^-28
+# Pleistocene: y = 22.001 - 0.355x, r^2 = 0.000, p = 0.295
 
 Figure3b = ggplot(data = Clean, 
                       aes(x = Mean_SST, y = Globosity_WoverL,
@@ -410,26 +429,60 @@ Figure3b = ggplot(data = Clean,
   scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) +
   geom_point() +
     geom_smooth() + # default of 95% confidence
+  geom_smooth(se = FALSE, method = lm) +
     geom_smooth(method = lm, color = "black") + # 95% confidence
   theme(axis.line = element_line(colour = "black", size = 0.25)) +
-  labs(x="Mean SST", y="Shape")
+  labs(x="Mean SST", y="Shape (Globosity, W/L)")
 Figure3b +
   theme_classic()
-ggsave("Figure3b_Data-Clean_SST-Shape.png", dpi = 800)
+ggsave("Figure3b_Data-Clean_MeanSST-Shape.png", dpi = 800)
+ggplotRegression(lm(Globosity_WoverL ~ Mean_SST, data = Clean))
+# ** y = 0.593 - 0.001x, r^2 = 0.002, p = 0.019
+# ** Anthropocene: y = 0.083 - 0.011x, r^2 = 0.083, p = 4.987 x 10^-30
+# ** Holocene: y = 0.018 + 0.504x, r^2 = 0.005, p = 3.018 x 10^-6
+# Pleistocene: y = -0.003 + 0.571x, r^2 = 0.000, p = 0.875
 
 Figure3c = ggplot(data = Clean, 
-                      aes(x = Mean_SST, y = Length_mm,
+                      aes(x = Latitude, y = Length_mm,
                       color = Epoch)) +
   scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) +
+  annotate("rect",ymin=-Inf,ymax=Inf,xmin=32.56,xmax=34.49, # adjust by transformation
+            alpha=0.3, fill="red") + # shade square
   geom_point() +
     geom_smooth() + # default of 95% confidence
+  geom_smooth(se = FALSE, method = lm) +
     geom_smooth(method = lm, color = "black") + # 95% confidence
   theme(axis.line = element_line(colour = "black", size = 0.25)) +
-  labs(x="Mean SST", y="Size")
+  labs(x="Latitude", y="Size (Length, mm)")
 Figure3c +
   theme_classic()
-ggsave("Figure3c_Data-Clean_SST-Size.png", dpi = 800)
+ggsave("Figure3c_Data-Clean_Latitude-Size.png", dpi = 800)
+ggplotRegression(lm(Length_mm ~ Latitude, data = Clean))
+# ** y = -19.306 + 1.146x, r^2 = 0.052, p = 5.842 x 10^-35
+# ** Anthropocene: y = -23.205 + 1.268x, r^2 = 0.035, p = 8.556 x 10^-13
+# ** Holocene: y = -17.004 + 1.083x, r^2 = 0.064, p = 2.08 x 10^-18
+# ** Pleistocene: y = -24.492 + 1.255x, r^2 = 0.057, p = 1.579 x 10^-5 
 
+Figure3d = ggplot(data = Clean, 
+                      aes(x = Latitude, y = Globosity_WoverL,
+                      color = Epoch)) +
+  scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) +
+  annotate("rect",ymin=-Inf,ymax=Inf,xmin=32.56,xmax=34.49, # adjust by transformation
+            alpha=0.3, fill="red") + # shade square
+  geom_point() +
+    geom_smooth() + # default of 95% confidence
+  geom_smooth(se = FALSE, method = lm) +
+    geom_smooth(method = lm, color = "black") + # 95% confidence
+  theme(axis.line = element_line(colour = "black", size = 0.25)) +
+  labs(x="Latitude", y="Shape (Globosity, W/L)")
+Figure3d +
+  theme_classic() 
+ggsave("Figure3d_Data-Clean_Latitude-Shape.png", dpi = 800)
+ggplotRegression(lm(Globosity_WoverL ~ Latitude, data = Clean))
+# ** y = 0.460 + 0.003x, r^2 = 0.011, p = 1.237 x 10^-8
+# ** Anthropocene: y = 0.310 + 0.008x, r^2 = 0.028, p = 5.554 x 10^-11
+# ** Holocene: y = 0.508 + 0.002x, r^2 = 0.008, p = 0.002
+# ** Pleistocene: y = 0.752 - 0.006x, r^2 = 0.025, p = 0.004
 ```
 
 Figure 4: Relationship between shell morphology and other factors (SoCal)
