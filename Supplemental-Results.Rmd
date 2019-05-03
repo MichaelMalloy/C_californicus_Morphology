@@ -1,13 +1,13 @@
 ---
 title: "Spatiotemporal Variation of Adult C. californicus Shell Allometry"
 author: "Malloy and Ul-Hasan and Lewis et al"
-date: "Apr 28, 2019"
+date: "May 3, 2019"
 output:
   word_document: default
   pdf_document: default
 ---
 
-Last edited [Sabah Ul-Hasan]: April 28, 2019
+Last edited [Sabah Ul-Hasan]: May 3, 2019
 
 https://github.com/MichaelMalloy/C_californicus_Morphology
 
@@ -20,6 +20,7 @@ Figure 2b       Shell allometry (shell manual)                Lines 264 - 304
 Supp Fig 1      Correlates for shell collection bias          Lines 306 - 333
 Figure 3a-d     Bergmann's rule: Morphology ~ temp ~ lat      Lines 335 - 486
 Figure 4        Major factors ~ Morphology (SoCal)            Lines
+Jann (Supp)                                                   Lines
 
 Overview of data and post-processing
 ```{r}
@@ -298,6 +299,22 @@ Fig2_chart +
   theme_classic() # theme for figure
 ggsave("Figure2b_Data-Clean_Shell-Allometry.png", dpi = 800)
 
+# GLM * doesnt work
+# fit <- glm(Width~Length,data=Fig2,family=binomial())
+# summary(fit) # display results
+# confint(fit) # 95% CI for the coefficients
+# exp(coef(fit)) # exponentiated coefficients
+# exp(confint(fit)) # 95% CI for exponentiated coefficients
+# predict(fit, type="response") # predicted values
+# residuals(fit, type="deviance") # residuals 
+
+ggplotRegression(lm(Length ~ Width, data = Fig2))
+# y = -0.212 + 1.771x, r^2 = 0.954, p = 0
+ggplotRegression(lm(Length ~ Globosity, data = Fig2))
+# ** y = 43.294 - 42.355x, r^2 = 0.077, p = 7.599 x 10^-52 
+ggplotRegression(lm(Width ~ Globosity, data = Fig2))
+# ** y = 14.505 - 6.413x, r^2 = 0.006, p = 4.475 x 10^0-5 
+
 # Length = Width, globosity independent of length and width
 # size = length=width, aperture and thickness are neglible as dependent on size (see categories)
 # shape = globosity
@@ -483,6 +500,24 @@ ggplotRegression(lm(Globosity_WoverL ~ Latitude, data = Clean))
 # ** Anthropocene: y = 0.310 + 0.008x, r^2 = 0.028, p = 5.554 x 10^-11
 # ** Holocene: y = 0.508 + 0.002x, r^2 = 0.008, p = 0.002
 # ** Pleistocene: y = 0.752 - 0.006x, r^2 = 0.025, p = 0.004
+
+SuppFig2 = ggplot(data = Clean, 
+                      aes(x = Latitude, y = Mean_SST,
+                      color = Epoch)) +
+  scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) +
+  annotate("rect",ymin=-Inf,ymax=Inf,xmin=32.56,xmax=34.49, # adjust by transformation
+            alpha=0.3, fill="red") + # shade square
+  geom_point() +
+    geom_smooth() + # default of 95% confidence
+  geom_smooth(se = FALSE, method = lm) +
+    geom_smooth(method = lm, color = "black") + # 95% confidence
+  theme(axis.line = element_line(colour = "black", size = 0.25)) +
+  labs(x="Latitude", y="Shape (Globosity, W/L)")
+SuppFig2 +
+  theme_classic() 
+ggsave("SuppFig2_Data-Clean_Latitude-MeanSST.png", dpi = 800)
+ggplotRegression(lm(Mean_SST ~ Latitude, data = Clean))
+# ** y = 34.464 - 0.548x, r^2 = 0.181, p = 1.750 x 10^-129
 ```
 
 Figure 4: Relationship between shell morphology and other factors (SoCal)
@@ -558,5 +593,164 @@ Fig4cii = ggcorr(Fig4c_Anthro, geom = "blank", label = TRUE, hjust = 0.75, size 
   guides(color = FALSE, alpha = FALSE)
 Fig4cii
 ggsave("Figure4cii_Clean_SoCal-Data_Anthropocene-Chart.png", dpi = 800)
+
+```
+
+Jann
+```{r}
+
+##### Shape and size metrics over time #####
+
+morphos = c("Globosity_WoverL", "Length_mm", "Width_mm", "Aperture_mm", "Thickness_mm") 
+morphos2 = c("Globosity_WoverL", "Length_mm", "Width_mm") # for Pleistocene
+
+# Clean x morphos
+png("Clean-All_Morphos.png")
+chart.Correlation(Clean %>% select(morphos)) 
+dev.off()
+png("Clean-Anthro_Morphos.png")
+chart.Correlation(Anthro %>% select(morphos)) 
+dev.off()
+png("Clean-Holo_Morphos.png")
+chart.Correlation(Holo %>% select(morphos)) 
+dev.off()
+png("Clean-Pleisto_Morphos.png")
+chart.Correlation(Pleisto %>% select(morphos2)) 
+dev.off()
+
+# SoCal x morphos
+png("Clean-SoCal_Morphos.png")
+chart.Correlation(Clean_SoCal %>% select(morphos)) 
+dev.off()
+png("Clean-SoCal-Anthro_Morphos.png")
+chart.Correlation(Anthro_SoCal %>% select(morphos)) 
+dev.off()
+png("Clean-SoCal-Holo_Morphos.png")
+chart.Correlation(Holo_SoCal %>% select(morphos)) 
+dev.off()
+png("Clean-SoCal-Pleisto_Morphos.png")
+chart.Correlation(Pleisto_SoCal %>% select(morphos2)) 
+dev.off()
+
+##### Shape and size metrics over time #####
+
+##### Relationship between size or shape and time #####
+# Retrieval of regression and p-value from ggplot2
+ggplotRegression <- function (fit) {
+
+require(ggplot2)
+
+ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red") +
+  labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                     "Intercept =",signif(fit$coef[[1]],5 ),
+                     " Slope =",signif(fit$coef[[2]], 5),
+                     " P =",signif(summary(fit)$coef[2,4], 5)))
+}
+
+# Subset for only decades
+Decades = subset(Clean, Epoch==c("Anthropocene", "Holocene")) 
+# Size and time 
+Decades_Size = ggplot(data = Decades, 
+                      aes(x = Decade, y = Length_mm,
+                      color = Epoch)) +
+  scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) +
+  geom_point() +
+    geom_smooth() + # default of 95% confidence
+  geom_smooth(se = FALSE, method = lm) +
+    geom_smooth(method = lm, color = "black") + # 95% confidence
+  theme(axis.line = element_line(colour = "black", size = 0.25)) +
+  labs(x="Decades", y="Size (Length, mm)")
+Decades_Size +
+  theme_classic()
+ggsave("Data-Clean_Decades-Size.png", dpi = 800)
+
+ggplotRegression(lm(Length_mm ~ Decade, data = Decades))
+# ** y = 40.596 - 0.011x, r^2 = 0.003, p = 0.038
+ggplotRegression(lm(Length_mm ~ Decade, data = Anthro))
+# Anthro: y = 18.429 - 0.000x, r^2 = 0.001, p = 0.960
+ggplotRegression(lm(Length_mm ~ Decade, data = Holo))
+# ** Holo: y = 135.64 + 0.015x, r^2 = 0.015, p = 1.617 x 10^-5 
+
+# Shape and time 
+Decades_Shape = ggplot(data = Decades, 
+                      aes(x = Decade, y = Globosity_WoverL,
+                      color = Epoch)) +
+  scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) +
+  geom_point() +
+    geom_smooth() + # default of 95% confidence
+  geom_smooth(se = FALSE, method = lm) +
+    geom_smooth(method = lm, color = "black") + # 95% confidence
+  theme(axis.line = element_line(colour = "black", size = 0.25)) +
+  labs(x="Decades", y="Shape (Globosity, W/L)")
+Decades_Shape +
+  theme_classic()
+ggsave("Data-Clean_Decades-Shape.png", dpi = 800)
+
+ggplotRegression(lm(Globosity_WoverL ~ Decade, data = Decades))
+# ** y = 1.061 - 0.000x, r^2 = 0.042, p = 3.414 x 10^-14
+ggplotRegression(lm(Globosity_WoverL ~ Decade, data = Anthro))
+# ** Anthro: y = 1.398 - 0.000x, r^2 = 0.073, p = 1.423 x 10^-26
+ggplotRegression(lm(Globosity_WoverL ~ Decade, data = Holo))
+# ** Holo: y = -0.995 + 0.001x, r^2 = 0.091, p = 1.381 x 10^-25
+
+# Subset for only decades *along the coast
+Coastal = subset(Decades, Land_Category=="Coastal") 
+Coastal_Anthro = subset(Coastal, Epoch=="Anthropocene") 
+Coastal_Holo = subset(Coastal, Epoch=="Holocene") 
+# Size
+Coastal_Size = ggplot(data = Coastal, 
+                      aes(x = Decade, y = Length_mm,
+                      color = Epoch)) +
+  scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) +
+  geom_point() +
+    geom_smooth() + # default of 95% confidence
+  geom_smooth(se = FALSE, method = lm) +
+    geom_smooth(method = lm, color = "black") + # 95% confidence
+  theme(axis.line = element_line(colour = "black", size = 0.25)) +
+  labs(x="Decades", y="Size (Length, mm)")
+Coastal_Size +
+  theme_classic()
+ggsave("Data-Clean-Coastal_Decades-Size.png", dpi = 800)
+
+ggplotRegression(lm(Length_mm ~ Decade, data = Coastal))
+# ** y = 54.23 - 0.018x, r^2 = 0.010, p = 0.003
+ggplotRegression(lm(Length_mm ~ Decade, data = Coastal_Anthro))
+# Anthro: y = 32.48 - 0.007x, r^2 = -0.001, p = 0.466
+ggplotRegression(lm(Length_mm ~ Decade, data = Coastal_Holo))
+# ** Holo: y = 319.51 - 0.155x, r^2 = 0.090, p = 6.398 x 10^-8
+
+# Shape
+Coastal_Shape = ggplot(data = Coastal, 
+                      aes(x = Decade, y = Globosity_WoverL,
+                      color = Epoch)) +
+  scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) +
+  geom_point() +
+    geom_smooth() + # default of 95% confidence
+  geom_smooth(se = FALSE, method = lm) +
+    geom_smooth(method = lm, color = "black") + # 95% confidence
+  theme(axis.line = element_line(colour = "black", size = 0.25)) +
+  labs(x="Decades", y="Shape (Globosity, W/L)")
+Coastal_Shape +
+  theme_classic()
+ggsave("Data-Clean-Coastal_Decades-Shape.png", dpi = 800)
+
+ggplotRegression(lm(Globosity_WoverL ~ Decade, data = Coastal))
+# ** y = 1.004 - 0.000x, r^2 = 0.040, p = 4.301 x 10^-9 
+ggplotRegression(lm(Globosity_WoverL ~ Decade, data = Coastal_Anthro))
+# ** Anthro: y = 1.041 - 0.000x, r^2 = 0.025, p = 2.012 x 10^-3
+ggplotRegression(lm(Globosity_WoverL ~ Decade, data = Coastal_Holo))
+# ** Holo: y = -0.966 + 0.001x, r^2 = 0.081, p = 2.736 x 10^-7
+
+
+
+
+
+# 1. Account for time when considering Bergmann's rule (human impact may relate)
+# 2. Identifying which morpholigical metrics are related vs which ones are not *comment on linear testing
+# 3. As you go North, size increases (across all epochs)
+#If phenomenon is statistically significant, then why?
+
 
 ```
