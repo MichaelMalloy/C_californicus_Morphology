@@ -1,25 +1,26 @@
 ---
 title: "Spatiotemporal Variation of Adult C. californicus Shell Allometry"
 author: "Malloy and Ul-Hasan and Lewis et al"
-date: "Jun 11, 2019"
+date: "Jun 25, 2019"
 output:
   word_document: default
   pdf_document: default
 ---
 
-Last edited [Sabah Ul-Hasan]: Jun 11, 2019
+Last edited [Sabah Ul-Hasan]: Jun 25, 2019
 
 https://github.com/MichaelMalloy/C_californicus_Morphology
 
 Contributors of data by order of contribution: MM, SUH, SC, CAO, JKK, WFG
 Contributors of code by order of contribution: SUH, LL, MM
 
-Data Clean-up       Post-processing: Raw -> Clean -> SoCal      Lines 24 - 153
-Fig 1a-b            Map of C. californicus range                Lines 155 - 271
-Fig 2b              Shell allometry (shell manual)              Lines 273 - 328
-Fig 3a-d,Supp Fig 1 Size or Shape and Lat / Temp, Bergmann's    Lines 330 - 476
-Fig 4a-f,Supp Fig 2 Size or Shape and Ecoregion + Proxmity      Lines 478 - 622
-Tables 1-2          Statistics breakdown (of all figures)       Lines 624 - 685
+Data Clean-up       Post-processing: Raw -> Clean -> SoCal      Lines 25 - 154
+Fig 1a-b            Map of C. californicus range                Lines 156 - 272
+Fig 2b              Shell allometry (shell manual)              Lines 274 - 329
+Fig 3a-d,Supp Fig 1 Size or Shape and Lat / Temp, Bergmann's    Lines 331 - 483
+Fig 4a-f,Supp Fig 2 Size or Shape and Ecoregion + Proxmity      Lines 475 - 630
+Tables 1-2          Statistics breakdown (of all figures)       Lines 632 - 693
+Supp Fig 3          Correlations to human population density    Lines 695 - 759
 
 Overview of data and post-processing
 ```{r}
@@ -206,23 +207,23 @@ Clean_map = ggmap(All) +
                   alpha = .25,
                   bins = 250,
                   geom = "polygon") +
-  scale_fill_gradientn(colors = "black") + # color fill, orange
+  scale_fill_gradientn(colors = "black") + # color fill, black
   geom_point(data = Anthro, aes(x = Longitude, y = Latitude), 
-             color = "#FC4E07",
+             color = "#FC4E07", # orange
              alpha = 0.15,
-             size = 1) + # aqua
+             size = 1) + 
   geom_point(data = Holo, aes(x = Longitude,y = Latitude), 
-             color = "#E7B800", 
+             color = "#E7B800", # gold
              alpha = 0.15,
-             size = 1) + # seagreen
+             size = 1) + 
   geom_point(data = Pleisto, aes(x = Longitude, y = Latitude), 
-             color = "#00AFBB",
+             color = "#00AFBB", # blue
              alpha = 0.15,
-             size = 1) + # blue 
+             size = 1) + 
   geom_point(data = Key, aes(x = Longitude, y = Latitude), # asbsent data
-             color = "#FC4E07",
+             color = "#FC4E07", # orange
              shape = 4,
-             size = 1.5) + # blue 
+             size = 1.5) + # manually added Punta Abreojos white circle
   geom_path(data=SoCal_box, aes(x,y), color="black", lwd=1) + # insert box
   labs(x="Longitude", y="Latitude") 
 Clean_map
@@ -250,7 +251,7 @@ CleanSoCal_map = ggmap(SoCal) +
                   alpha = .35,
                   bins = 250,
                   geom = "polygon") +
-  scale_fill_gradientn(colors = "black") + # color fill, orange
+  scale_fill_gradientn(colors = "black") + 
   geom_point(data = Anthro_SoCal, aes(x = Longitude, y = Latitude), 
              color = "#FC4E07",
              alpha = 0.15,
@@ -473,10 +474,17 @@ ggplotRegression(lm(Mean_SST ~ Globosity_WoverL, data = subset(Clean_New, Epoch=
 ggplotRegression(lm(Mean_SST ~ Globosity_WoverL, data = subset(Clean_New, Epoch=="Pleistocene")))
 # ** y = 13.21 - 0.237x, r^2 = -0.003, p = 0.875
 
+ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean_New))) # p = 0.923
+ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean_New, Epoch=="Anthropocene"))) # p < 0.0001
+ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean_New, Epoch=="Holocene")))
+# p < 0.0001
+ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean_New, Epoch=="Pleistocene"))) # p = 0.03
+
 ```
 
 Q3) Do size/shape vary in relation to ecoregion and coastal proximity? Yes.
-Figure 4a-f, Supp Fig 2: Size vs shape for ecoregion and coastal proximity (Clean_New)
+Figure 4a-f, Supp Fig 2: Size vs shape for ecoregion and coastal proximity
+(Clean_New)
 ```{r}
 
 # install.packages("ggplot2")
@@ -682,4 +690,70 @@ for(i in Tab2){
  # print(r)
 }
 
+```
+
+Supplemental Figure 3: Relationship to human population density
+```{r}
+
+SuppFig3 = subset(Clean_New, Epoch!="Pleistocene")
+SuppFig3 = subset(SuppFig3, Collection!="PR") # Removed personal research (biases SD)
+SuppFig3 = subset(SuppFig3, Population_Density > 0) # 1349 observations
+
+# Create a column that converts population density to categories by standard deviation
+min(SuppFig3$Population_Density) # 0.00932179
+x <- mean(SuppFig3$Population_Density) # 247.2658
+SD <- sd(SuppFig3$Population_Density) # 546.268
+max(SuppFig3$Population_Density) # 2708.81
+
+SuppFig3$Human_pop[SuppFig3$Population_Density < (617-546)] <- "Low"
+SuppFig3$Human_pop[SuppFig3$Population_Density > (617+546)] <- "High"
+SuppFig3$Human_pop[SuppFig3$Population_Density > (617-545) & 
+                     SuppFig3$Population_Density < (617+545)] <- "Medium"
+
+# Supp Fig 3a-b 
+SuppFig3a = ggplot(data = SuppFig3, 
+                      aes(x = Decade, y = Width_mm,
+                      color = Human_pop,
+                      alpha = 0.4)) +
+  geom_smooth(se = FALSE, method = lm) +
+  geom_smooth(method = lm, color = "black") + # 95% confidence
+  geom_point(aes(color = Human_pop)) + 
+  geom_errorbar(stat="summary", fun.data="mean_se", fun.args = list(mult = 1.96), width=0) +
+    geom_smooth(method=lm, se = TRUE, alpha = 0.35) + # 95% confidence interval
+  labs(x="Decade", y="Size (Width mm)")
+SuppFig3a +
+  theme_classic() 
+ggsave("SuppFig3a_Data-Clean_New_Decade-Width-Human.png", dpi = 800)
+# Regression by category
+ggplotRegression(lm(Width_mm ~ Decade, data = SuppFig3))
+# ** y = 114.07 - 0.053x, r^2 = 0.076, p = 2.118e-23
+ggplotRegression(lm(Width_mm ~ Decade, data = subset(SuppFig3, Human_pop=="Low")))
+# ** y = 147.5 - 0.070x, r^2 = 0.162, p = 1.87e-38
+ggplotRegression(lm(Width_mm ~ Decade, data = subset(SuppFig3, Human_pop=="Medium")))
+# ** y = -197.93 + 0.107x, r^2 = 0.059, p = 0.00014
+ggplotRegression(lm(Width_mm ~ Decade, data = subset(SuppFig3, Human_pop=="High")))
+# ** y = 583.62 - 0.291x, r^2 = 0.394, p = 1.309e-10
+
+SuppFig3b = ggplot(data = SuppFig3, 
+                      aes(x = Decade, y = Globosity_WoverL,
+                      color = Human_pop,
+                      alpha = 0.4)) +
+  geom_smooth(se = FALSE, method = lm) +
+  geom_smooth(method = lm, color = "black") + # 95% confidence
+  geom_point(aes(color = Human_pop)) + 
+  geom_errorbar(stat="summary", fun.data="mean_se", fun.args = list(mult = 1.96), width=0) +
+    geom_smooth(method=lm, se = TRUE, alpha = 0.35) + # 95% confidence interval
+  labs(x="Decade", y="Globosity, W/L")
+SuppFig3b +
+  theme_classic() 
+ggsave("SuppFig3b_Data-Clean_New_Decade-Globosity-Human.png", dpi = 800)
+
+ggplotRegression(lm(Globosity_WoverL ~ Decade, data = SuppFig3))
+# y = 0.444 + 6.99e-5x, r^2 = 0.002, p = 0.074
+ggplotRegression(lm(Globosity_WoverL ~ Decade, data = subset(SuppFig3, Human_pop=="Low")))
+# ** y = 0.019x - 2.88e-4x, r^2 = 0.028, p = 8.486e-8
+ggplotRegression(lm(Globosity_WoverL ~ Decade, data = subset(SuppFig3, Human_pop=="Medium")))
+# ** y = 1.858 - 6.49e-4x, r^2 = 0.101, p = 4.326e-7
+ggplotRegression(lm(Globosity_WoverL ~ Decade, data = subset(SuppFig3, Human_pop=="High")))
+# y = 0.795 - 1.11e-4x, r^2 = 0.002, p = 0.249
 ```
