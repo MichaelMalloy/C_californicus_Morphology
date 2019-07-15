@@ -1,26 +1,26 @@
 ---
 title: "Spatiotemporal Variation of Adult C. californicus Shell Allometry"
 author: "Malloy and Ul-Hasan and Lewis et al"
-date: "Jun 25, 2019"
+date: "Jul 14, 2019"
 output:
   word_document: default
   pdf_document: default
 ---
 
-Last edited [Sabah Ul-Hasan]: Jun 25, 2019
+Last edited [Sabah Ul-Hasan]: Jul 15, 2019
 
 https://github.com/MichaelMalloy/C_californicus_Morphology
 
 Contributors of data by order of contribution: MM, SUH, SC, CAO, JKK, WFG
-Contributors of code by order of contribution: SUH, LL, MM
+Contributors of code by order of contribution: SUH, LL, MM, SS
 
 Data Clean-up       Post-processing: Raw -> Clean -> SoCal      Lines 25 - 154
 Fig 1a-b            Map of C. californicus range                Lines 156 - 272
 Fig 2b              Shell allometry (shell manual)              Lines 274 - 329
 Fig 3a-d,Supp Fig 1 Size or Shape and Lat / Temp, Bergmann's    Lines 331 - 483
 Fig 4a-f,Supp Fig 2 Size or Shape and Ecoregion + Proxmity      Lines 475 - 630
-Tables 1-2          Statistics breakdown (of all figures)       Lines 632 - 693
-Supp Fig 3          Correlations to human population density    Lines 695 - 759
+Tables 1-2          Statistics breakdown (of all figures)       Lines 632 - 702
+Supp Fig 3          Correlations to human population density    Lines 704 - 769
 
 Overview of data and post-processing
 ```{r}
@@ -633,27 +633,20 @@ Tables 1-2: Statistics, namely for Figs 3-4 (Clean_New)
 ```{r}
 
 # Table 1 (for Fig 3)
+Clean_Numeric <- Clean_New # This is to have lm() Epoch show up as one instead of breakdown
+Clean_Numeric$Epoch<-as.numeric(Clean_Numeric$Epoch)
+
 Fig3a_aov <- aov(Width_mm ~ Latitude + Epoch + Latitude*Epoch, data = Clean_New)
+Fig3a_GIM <- lm(Width_mm ~ Latitude + Epoch + Latitude*Epoch, data = Clean_Numeric)
 
 Fig3b_aov <- aov(Width_mm ~ Mean_SST + Epoch + Mean_SST*Epoch, data = Clean_New)
-Fig3b_GIM <- lm(Width_mm~ Mean_SST + Epoch + Mean_SST*Epoch, data = Clean_New)
+Fig3b_GIM <- lm(Width_mm ~ Mean_SST + Epoch + Mean_SST*Epoch, data = Clean_Numeric)
 
 Fig3c_aov <- aov(Globosity_WoverL ~ Latitude + Epoch + Latitude*Epoch, data = Clean_New)
-Fig3c_GIM <- lm(Globosity_WoverL ~ Latitude + Epoch + Latitude*Epoch, data = Clean_New)
+Fig3c_GIM <- lm(Globosity_WoverL ~ Latitude + Epoch + Latitude*Epoch, data = Clean_Numeric)
 
 Fig3d_aov <- aov(Globosity_WoverL ~ Mean_SST + Epoch + Mean_SST*Epoch, data = Clean_New)
-Fig3d_GIM <- lm(Globosity_WoverL ~ Mean_SST + Epoch + Mean_SST*Epoch, data = Clean_New)
-
-# Create a list for all models
-Tab1 <- list(Fig3a_aov, Fig3b_aov, Fig3b_GIM, Fig3c_aov, Fig3c_GIM, Fig3d_aov, Fig3d_GIM) 
-
-# Print summary as Table 1
-for(i in Tab1){
- 
- print(summary(i))
-  # r <- summary(i)$adj.r.squared
- # print(r)
-}
+Fig3d_GIM <- lm(Globosity_WoverL ~ Mean_SST + Epoch + Mean_SST*Epoch, data = Clean_Numeric)
 
 # For Supp Fig 2
 SuppFig2a_aov <- aov(Mean_SST ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Pleistocene")) # interaction by ecoregion only
@@ -665,23 +658,39 @@ SuppFig2c_aov <- aov(Mean_SST ~ Ecoregion + Coastal_Proximity + Ecoregion*Coasta
 SuppFig2c_GIM <- lm(Mean_SST ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Anthropocene")) # significant for all
 
 # Table 2 (for Fig 4)
+Clean_Numeric <- Clean_New # Need to re-do for filter by Epoch
+Clean_Numeric$Ecoregion <- as.numeric(Clean_Numeric$Ecoregion)
+Clean_Numeric$Coastal_Proximity <- as.numeric(Clean_Numeric$Coastal_Proximity)
+
 Fig4a_aov <- aov(Width_mm ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Pleistocene")) # no significance
+Fig4a_GIM <- lm(Width_mm ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_Numeric, Epoch=="Pleistocene"))
 
 Fig4b_aov <- aov(Width_mm ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Holocene")) # significant interaction
-Fig4b_GIM <- lm(Width_mm ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Holocene")) # significant for all
+Fig4b_GIM <- lm(Width_mm ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_Numeric, Epoch=="Holocene")) # significant for all
 
 Fig4c_aov <- aov(Width_mm ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Anthropocene")) # significant interaction
-Fig4c_GIM <- lm(Width_mm ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Anthropocene")) # significant for all
+Fig4c_GIM <- lm(Width_mm ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_Numeric, Epoch=="Anthropocene")) # significant for all
 
 Fig4d_aov <- aov(Globosity_WoverL ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Pleistocene")) # no significance
+Fig4d_GIM <- lm(Globosity_WoverL ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_Numeric, Epoch=="Pleistocene")) # no significance
 
 Fig4e_aov <- aov(Globosity_WoverL ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Holocene")) # significant interaction
-Fig4e_GIM <- lm(Globosity_WoverL ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Holocene")) # significant for all
+Fig4e_GIM <- lm(Globosity_WoverL ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_Numeric, Epoch=="Holocene")) # significant for all
 
 Fig4f_aov <- aov(Globosity_WoverL ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Anthropocene")) # significant interaction
-Fig4f_GIM <- lm(Globosity_WoverL ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_New, Epoch=="Anthropocene")) # no significance between ecoregions
+Fig4f_GIM <- lm(Globosity_WoverL ~ Ecoregion + Coastal_Proximity + Ecoregion*Coastal_Proximity, data = subset(Clean_Numeric, Epoch=="Anthropocene")) # no significance between ecoregions
 
-Tab2 <- list(Fig4a_aov, Fig4b_aov, Fig4b_GIM, Fig4c_aov, Fig4c_GIM, Fig4d_aov, Fig4e_aov, Fig4e_GIM, Fig4f_aov, Fig4f_GIM) 
+# Tables 1, 2
+Tab1 <- list(Fig3a_GIM, Fig3b_GIM, Fig3c_GIM, Fig3d_GIM)
+Tab2 <- list(Fig4a_GIM, Fig4b_GIM, Fig4c_GIM, Fig4d_GIM, Fig4e_GIM, Fig4f_GIM) 
+
+# Print summaries of each respective table 
+for(i in Tab1){
+ 
+ print(summary(i))
+  # r <- summary(i)$adj.r.squared
+ # print(r)
+}
 
 for(i in Tab2){
  
@@ -756,4 +765,5 @@ ggplotRegression(lm(Globosity_WoverL ~ Decade, data = subset(SuppFig3, Human_pop
 # ** y = 1.858 - 6.49e-4x, r^2 = 0.101, p = 4.326e-7
 ggplotRegression(lm(Globosity_WoverL ~ Decade, data = subset(SuppFig3, Human_pop=="High")))
 # y = 0.795 - 1.11e-4x, r^2 = 0.002, p = 0.249
+
 ```
