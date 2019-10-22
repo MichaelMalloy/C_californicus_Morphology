@@ -1,13 +1,12 @@
 ---
-title: "Spatiotemporal Variation of Adult C. californicus Shell Allometry"
-author: "Malloy and Ul-Hasan and Lewis et al"
-date: "Jul 14, 2019"
+title: "Bergmann’s Rule and Cope’s Rule across the Pleistocene, Holocene, and Anthropocene in an Eastern Pacific gastropod, Californiconus californicus"
+author: "Malloy and Ul-Hasan et al"
+date: "Oct 22, 2019"
 output:
-  word_document: default
   pdf_document: default
 ---
 
-Last edited [Sabah Ul-Hasan]: Jul 15, 2019
+Last edited [Sabah Ul-Hasan]: Oct 22, 2019
 
 https://github.com/MichaelMalloy/C_californicus_Morphology
 
@@ -21,6 +20,7 @@ Fig 3a-d,Supp Fig 1 Size or Shape and Lat / Temp, Bergmann's    Lines 331 - 483
 Fig 4a-f,Supp Fig 2 Size or Shape and Ecoregion + Proxmity      Lines 475 - 630
 Tables 1-2          Statistics breakdown (of all figures)       Lines 632 - 702
 Supp Fig 3          Correlations to human population density    Lines 704 - 769
+Cope's Rule         Size by location ~ Epoch                    Lines 771 - 
 
 Overview of data and post-processing
 ```{r}
@@ -765,5 +765,107 @@ ggplotRegression(lm(Globosity_WoverL ~ Decade, data = subset(SuppFig3, Human_pop
 # ** y = 1.858 - 6.49e-4x, r^2 = 0.101, p = 4.326e-7
 ggplotRegression(lm(Globosity_WoverL ~ Decade, data = subset(SuppFig3, Human_pop=="High")))
 # y = 0.795 - 1.11e-4x, r^2 = 0.002, p = 0.249
+
+```
+
+Cope's Rule
+```{r}
+
+Copes <- Clean_New[c("Location", "Epoch", "Width_mm", "Length_mm", "Globosity_WoverL")]
+Copes <- Copes[complete.cases(Copes), ] # removes NAs from all rows to only compare where all measurements are available
+
+All_Locales <- lm(Width_mm ~ Location + Epoch + Location*Epoch , data = Clean_New) # interaction by ecoregion only
+summary(All_Locales)
+Merged <- aov(Width_mm ~ Epoch , data = Clean_New) # interaction by ecoregion only
+summary(Merged) # yes, significant by size
+
+# bar plot
+# width, locations merge by epoch
+Copes_new <- Copes %>% select("Location", "Epoch", "Width_mm") %>%
+  group_by(Epoch) %>%            # group data for limit calculation
+  mutate(upper = mean(Width_mm) + sd(Width_mm), # upper limit for error bar
+         lower = mean(Width_mm) - sd(Width_mm)) # lower limit for error bar
+
+
+Width <- ggplot(Copes_new, aes(x = Epoch, y = Width_mm, fill = Epoch)) +
+  stat_summary(fun.y = mean, geom = "bar", position = position_dodge(width = .9),
+               size = 3) +
+  geom_errorbar(aes(ymin = lower, ymax = upper),
+                width = .2,                    # Width of the error bars
+                position = position_dodge(.9))
+ggsave("Copes_Widthmm_Epoch-All.png", dpi = 800)
+
+# width, locations separated out
+Copes_new <- Copes %>% select("Location", "Epoch", "Width_mm") %>%
+  group_by(Epoch, Location) %>%            # group data for limit calculation
+  mutate(upper = mean(Width_mm) + sd(Width_mm), # upper limit for error bar
+         lower = mean(Width_mm) - sd(Width_mm)) # lower limit for error bar
+
+Width <- ggplot(Copes_new, aes(x = Location, y = Width_mm, fill = Epoch)) +
+  stat_summary(fun.y = mean, geom = "bar", position = position_dodge(width = .9),
+               size = 3) +
+  geom_errorbar(aes(ymin = lower, ymax = upper),
+                width = .2,                    # Width of the error bars
+                position = position_dodge(.9))
+Width
+ggsave("Copes_Widthmm_Epoch-by-Location.png", dpi = 800)
+
+
+# Length
+Copes_new <- Copes %>% select("Location", "Epoch", "Length_mm") %>%
+  group_by(Epoch) %>%            # group data for limit calculation
+  mutate(upper = mean(Length_mm) + sd(Length_mm), # upper limit for error bar
+         lower = mean(Length_mm) - sd(Length_mm)) # lower limit for error bar
+
+Length <- ggplot(Copes_new, aes(x = Epoch, y = Length_mm, fill = Epoch)) +
+  stat_summary(fun.y = mean, geom = "bar", position = position_dodge(width = .9),
+               size = 3) +
+  geom_errorbar(aes(ymin = lower, ymax = upper),
+                width = .2,                    # Length of the error bars
+                position = position_dodge(.9))
+ggsave("Copes_Lengthmm_Epoch-All.png", dpi = 800)
+
+# Length, locations separated out
+Copes_new <- Copes %>% select("Location", "Epoch", "Length_mm") %>%
+  group_by(Epoch, Location) %>%            # group data for limit calculation
+  mutate(upper = mean(Length_mm) + sd(Length_mm), # upper limit for error bar
+         lower = mean(Length_mm) - sd(Length_mm)) # lower limit for error bar
+
+Length <- ggplot(Copes_new, aes(x = Location, y = Length_mm, fill = Epoch)) +
+  stat_summary(fun.y = mean, geom = "bar", position = position_dodge(width = .9),
+               size = 3) +
+  geom_errorbar(aes(ymin = lower, ymax = upper),
+                width = .2,                    # Length of the error bars
+                position = position_dodge(.9))
+Length
+ggsave("Copes_Lengthmm_Epoch-by-Location.png", dpi = 800)
+
+# Globosity
+Copes_new <- Copes %>% select("Location", "Epoch", "Globosity_WoverL") %>%
+  group_by(Epoch) %>%            # group data for limit calculation
+  mutate(upper = mean(Globosity_WoverL) + sd(Globosity_WoverL), # upper limit for error bar
+         lower = mean(Globosity_WoverL) - sd(Globosity_WoverL)) # lower limit for error bar
+
+Length <- ggplot(Copes_new, aes(x = Epoch, y = Globosity_WoverL, fill = Epoch)) +
+  stat_summary(fun.y = mean, geom = "bar", position = position_dodge(width = .9),
+               size = 3) +
+  geom_errorbar(aes(ymin = lower, ymax = upper),
+                width = .2,                    # Length of the error bars
+                position = position_dodge(.9))
+ggsave("Copes_Globosity_Epoch-All.png", dpi = 800)
+
+Copes_new <- Copes %>% select("Location", "Epoch", "Globosity_WoverL") %>%
+  group_by(Epoch, Location) %>%            # group data for limit calculation
+  mutate(upper = mean(Globosity_WoverL) + sd(Globosity_WoverL), # upper limit for error bar
+         lower = mean(Globosity_WoverL) - sd(Globosity_WoverL)) # lower limit for error bar
+
+Length <- ggplot(Copes_new, aes(x = Location, y = Globosity_WoverL, fill = Epoch)) +
+  stat_summary(fun.y = mean, geom = "bar", position = position_dodge(width = .9),
+               size = 3) +
+  geom_errorbar(aes(ymin = lower, ymax = upper),
+                width = .2,                    # Length of the error bars
+                position = position_dodge(.9))
+Length
+ggsave("Copes_Globosity_Epoch-by-Location.png", dpi = 800)
 
 ```
