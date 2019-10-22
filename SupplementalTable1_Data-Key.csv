@@ -1,21 +1,21 @@
-﻿Collection Code,Collection Key,No. Specimens (Raw Data),Location Code,No. Specimens (Raw Data),Location Key,Shell Substrate Notes Code,Shell Substrate Notes Key
-ANSP,Academy of Natural Sciences of Drexel University,27,ANA,50,Anacapa Island,ALG,Algae
-CAS,California Academy of Sciences,301,BS,2,Big Sur,BAR,Barnacles
-iNat,iNaturalist,99,CAT,431,Santa Catalina Island,BOR_INC,Incomplete Borehole
-LACM-M,"Natural History Museum of Los Angeles, Malacology ",1272,LA,843,Los Angeles,BOR_STR,Straight Borehole
-LACM-M-IP,"Natural History Museum of Los Angeles, Malacology - Invertebrate Palentology",331,MB,60,Morro Bay,BOR_TAP,Tapered Borehole
-MCZ,"Museum of Comparative Zoology, Harvard University",199,MO,42,Monterey Bay,BRY,Bryozoans
-PR,Personal Research,474,NBC,170,Northern Baja California,CCA,Coraline crust
-SBNHM,Santa Barbara Museum of Natural History,274,NLA,41,North LA,LMP,Limpet
-SIO,Scripps Institution of Oceanography Collections,19,SB,92,Santa Barbara,SCR,Scarring
-,,,SBC,57,Southern Baja California,TWS,Tube Worm Shells
-,,,SBI,32,Santa Barbara Island,,
-,,,SCI,52,Santa Clemente Island,,
-,,,SCZI,150,Santa Cruz Island,,
-,,,SD,527,San Diego,,
-,,,SLA,277,South LA,,
-,,,SM,5,San Mateo,,
-,,,SMI,24,Santa Miguel Island,,
-,,,SNI,31,San Nicolas Island,,
-,,,SO,5,Sonoma,,
-,,,SRI,105,Santa Rosa Island,,
+﻿Collection Code,Collection Key,No. Specimens (Raw Data),Location Code,No. Specimens (Raw Data),Location Key,Shell Substrate Notes Code,Shell Substrate Notes Key,Baja Sur Locations Sampled Where C. californicus ABSENT,Baja Sur Locations Sampled Where C. californicus PRESENT,Latitude,Longitude,Month,Year,Collector
+ANSP,Academy of Natural Sciences of Drexel University,27,ANA,50,Anacapa Island,ALG,Algae,Isla Cedros,,28.08027,-115.3391,3,2004,William Gilly
+CAS,California Academy of Sciences,301,BS,2,Big Sur,BAR,Barnacles,Bahia Tortugas,,27.66767,-114.89953,3,2004,William Gilly
+iNat,iNaturalist,99,CAT,431,Santa Catalina Island,BOR_INC,Incomplete Borehole,Bahia Asuncion ,,27.12847,-114.29572,3,2004,William Gilly
+LACM-M,"Natural History Museum of Los Angeles, Malacology ",1272,LA,843,Los Angeles,BOR_STR,Straight Borehole,,Bahia Asuncion ,27.12847,-114.29572,,2006,William Gilly
+LACM-M-IP,"Natural History Museum of Los Angeles, Malacology - Invertebrate Palentology",331,MB,60,Morro Bay,BOR_TAP,Tapered Borehole,,Bahia Asuncion ,27.12847,-114.29572,,2008,William Gilly
+MCZ,"Museum of Comparative Zoology, Harvard University",199,MO,42,Monterey Bay,BRY,Bryozoans,Punta Abreojos,,26.70833,-113.57378,4,2004,William Gilly
+PR,Personal Research,474,NBC,170,Northern Baja California,CCA,Coraline crust,Los Cerritos,,23.33,-110.1775,4,2004,William Gilly
+SBNHM,Santa Barbara Museum of Natural History,274,NLA,41,North LA,LMP,Limpet,Punta Pequena,,26.23817,-112.47817,4,2004,William Gilly
+SIO,Scripps Institution of Oceanography Collections,19,SB,92,Santa Barbara,SCR,Scarring,Cabo Lazaro,,24.77475,-112.26177,4,2004,William Gilly
+,,,SBC,57,Southern Baja California,TWS,Tube Worm Shells,Punta Marquez,,23.95569,-110.87467,4,2004,William Gilly
+,,,SBI,32,Santa Barbara Island,,,Punta Tosca,,24.30695,-111.71032,4,2004,William Gilly
+,,,SCI,52,Santa Clemente Island,,,Cabo San Lucas,,22.8798,-109.90327,4,2004,William Gilly
+,,,SCZI,150,Santa Cruz Island,,,Bahia Tortugas,,27.66767,-114.89953,7,2017,Sabah Ul-Hasan
+,,,SD,527,San Diego,,,Bahia Asuncion ,,27.12847,-114.29572,7,2017,Sabah Ul-Hasan
+,,,SLA,277,South LA,,,Punta Abreojos,,26.70833,-113.57378,7,2017,Sabah Ul-Hasan
+,,,SM,5,San Mateo,,,Punta Pequena,,26.23817,-112.47817,7,2017,Sabah Ul-Hasan
+,,,SMI,24,Santa Miguel Island,,,,,,,,,
+,,,SNI,31,San Nicolas Island,,,,,,,,,
+,,,SO,5,Sonoma,,,,,,,,,
+,,,SRI,105,Santa Rosa Island,,,,,,,,,
