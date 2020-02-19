@@ -1,34 +1,35 @@
 ---
-title: "Bergmann’s Rule and Cope’s Rule across the Pleistocene, Holocene, and Anthropocene in an Eastern Pacific gastropod, Californiconus californicus"
+title: "Bergmann’s Rule across the Pleistocene, Holocene, and Anthropocene in an Eastern Pacific neogastropod, Californiconus californicus (Reeve, 1844) (Gastropoda: Conidae)"
 author: "Malloy and Ul-Hasan et al"
-date: "Oct 22, 2019"
+date: "Feb 19, 2020"
 output:
   pdf_document: default
 ---
 
-Last edited [Sabah Ul-Hasan]: Oct 22, 2019
+Last edited [Sabah Ul-Hasan]: Feb 19, 2020
 
 https://github.com/MichaelMalloy/C_californicus_Morphology
 
 Contributors of data by order of contribution: MM, SUH, SC, CAO, JKK, WFG
-Contributors of code by order of contribution: SUH, LL, MM, SS
+Contributors of code by order of contribution: SUH, LL, MM, SS, CAO
 
-Data Clean-up       Post-processing: Raw -> Clean -> SoCal      Lines 25 - 154
-Fig 1a-b            Map of C. californicus range                Lines 156 - 272
-Fig 2b              Shell allometry (shell manual)              Lines 274 - 329
-Fig 3a-d,Supp Fig 1 Size or Shape and Lat / Temp, Bergmann's    Lines 331 - 483
-Fig 4a-f,Supp Fig 2 Size or Shape and Ecoregion + Proxmity      Lines 475 - 630
-Tables 1-2          Statistics breakdown (of all figures)       Lines 632 - 702
-Supp Fig 3          Correlations to human population density    Lines 704 - 769
-Cope's Rule         Size by location ~ Epoch                    Lines 771 - 
+Data Clean-up        Post-processing: Raw -> Clean + SoCal       
+*Fig 1a-b            Map of C. californicus range                
+*Fig 2b              Shell allometry (Fig 2a of shell manual)             
+*Fig 3a-d,Supp Fig 1 Size or Shape and Lat / Temp, Bergmann's    
+*Fig 4a-f,Supp Fig 2 Size or Shape and Ecoregion + Proxmity      
+*Tables 1-2          Statistics breakdown (of all figures)      
+*Supp Fig 3          Correlations to human population density    
+*Cope's Rule         Size by location ~ Epoch                    
 
 Overview of data and post-processing
 ```{r}
 
 ###### Upload data ######
-# install.packages("RCurl")
-library("RCurl") # package needed for downloading data from Github repo
-# packageVersion("RCurl") # v1.95.4.12 
+# Need package for downloading data from Github repo
+## install.packages("RCurl")
+library("RCurl") 
+## packageVersion("RCurl") # v1.98.1.1 
 
 Raw <- read.csv(text=getURL("https://raw.githubusercontent.com/MichaelMalloy/C_californicus_Morphology/master/SupplementalTable2_Data-Raw.csv")) 
 
@@ -39,160 +40,201 @@ Key <- read.csv(text=getURL("https://raw.githubusercontent.com/MichaelMalloy/C_c
 
 
 ###### Data structure ######
-str(Raw) # Quick view of RawData
+# Quick view of RawData
+str(Raw) 
 
 # Plots of shell morphology measurements as a point of reference for outliers 
-morphos = c("Globosity_WoverL", "Length_mm", "Width_mm", "Aperture_mm", "Thickness_mm") 
+morphos = c("Length_mm", "Width_mm", "Aperture_mm", "Thickness_mm", "Globosity_WoverL", "Geometric_Mean")
 
-# install.packages("PerformanceAnalytics")
-library("PerformanceAnalytics") # Need package for correlation charts
-# packageVersion("PerformanceAnalytics") # v1.5.2
+# Need package for correlation charts
+## install.packages("PerformanceAnalytics")
+library("PerformanceAnalytics") 
+## packageVersion("PerformanceAnalytics") # v2.0.4
 
-# install.packages("tidyverse")
-library("tidyverse") # Need package pipes ( %>% or "then" )
-# packageVersion("tidyverse") # v1.2.1
- 
-chart.Correlation(Raw %>% select(morphos)) # we can see outliers here
+# Need package pipes ( %>% or "then" )
+## install.packages("tidyverse")
+library("tidyverse") 
+## packageVersion("tidyverse") # v1.3.0
+
+# Check for outliers by correlation matrix
+Raw_CorrMatrix = chart.Correlation(Raw %>% 
+                                     select(morphos)) 
+Raw_CorrMatrix
 ###### Data structure ######
 
 
 ###### Clean-up ######
-# Subset for shells without aperture / thickness (iNat will be included)
-Raw_globoshells = subset(Raw, is.na(Raw$Thickness_mm))
-Raw_iNat = subset(Raw, Raw$Collection=="iNat") # 99 specifically from iNat
+# Organization of locations in dataset
+## Re-order counties, North to South
+counties = c("Sonoma", "San Mateo", "Monterey", "San Luis Obispo", "Santa Barbara", "Ventura", "Los Angeles", "Orange", "San Diego", "Baja California")
+Raw$County = factor(Raw$County, levels=counties) # order counties
+## Order SoCal counties and locales for when subsetting SoCal data
+socal = c("Santa Barbara", "Ventura", "Los Angeles", "Orange", "San Diego")
+socal_locations = c("SB", "NLA", "LA", "SLA", "SD", "ANA", "SCZI", "SRI", "SMI", "CAT", "SBI", "SNI", "SCI") # socal location order
+la = "Los Angeles"
 
-# Filter outliers (min and max values identified by viewing Raw)
-# Confirmed outliers from operator error (measuring or datasheet input)
-Clean_OutliersRemoved = Raw %>% # 2996 obs 
-  filter(Thickness_mm < 2) %>% # low thickness
-  filter(!(Width_mm < 15 & Thickness_mm > 2)) %>% # too thick for width
-  filter(Aperture_mm < 6) %>%  # small aperture
-  filter(!(Length_mm > 20 & Aperture_mm <2)) %>% # aperture too small for length
-  rbind(Raw_globoshells) %>%   # adds 775 shells back in *length that's above the threshold?
+# Filter outliers (min/max values identified by Raw correlations)
+## Subset for including back in as part of Clean / filtered set (below)
+No_TA = subset(Raw, is.na(Raw$Thickness_mm)) # 775 no T or A
+Raw_iNat = subset(Raw, Raw$Collection=="iNat") # 99 from iNat
+## Confirmed to be operator error (measuring or datasheet input)
+OutliersRemoved = Raw %>% # 2996 obs 
+  filter(Thickness_mm < 2) %>% # low T
+  filter(!(Width_mm < 15 & Thickness_mm > 2)) %>% # too thick for W
+  filter(Aperture_mm < 6) %>%  # small A
+  filter(!(Length_mm > 20 & Aperture_mm <2)) %>% # A too small for L
+  rbind(No_TA) %>%  # adds 775 shells back in 
   filter(Width_mm > 2) %>%  # too narrow (note this gets rid of iNat)
   rbind(Raw_iNat) %>% # add iNat back in
   filter(Globosity_WoverL > 0.42 & Globosity_WoverL < 0.71 ) %>% 
   data.frame # ensure it's a data frame
-# Remove 25 shells from Pliocene (too old, few)
-Clean_OutliersRemoved=subset(Clean_OutliersRemoved, !Epoch=="Pliocene")
-
-# 50 shells of original 2996 removed (2946 obs)
-length(Raw %>% filter(Thickness_mm >= 2) %>% .$Specimen_Number)
-paste(length(Raw$Specimen_Number)-length(Clean_OutliersRemoved$Specimen_Number), "removed of", length(Raw$Specimen_Number), "shells")
-
-# Ensure updated Clean dataset has 3 or more specimens per lot
-Clean = Clean_OutliersRemoved %>% 
+## Remove 25 shells from Pliocene (too old, few)
+OutliersRemoved=subset(OutliersRemoved, !Epoch=="Pliocene")
+## Filter specimens that may skew in being in the open ocean and/or too north or south
+min(OutliersRemoved$Latitude) # 26.43
+max(OutliersRemoved$Latitude) # 38.16
+### Ensure updated Clean dataset has 3 or more specimens per lot
+Clean = OutliersRemoved %>% 
+  filter(Latitude > 26.43) %>% 
+  filter(Latitude < 38.16) %>% 
   group_by(Lot_Number) %>% 
   mutate(Specimens_per_Lot = length((Lot_Number))) %>%
   ungroup %>% 
   filter(Specimens_per_Lot > 2 | Collection == "iNat") # keep catalogs with > 2 in lot and iNat (1 per 'lot')
-
-# 61 shells of original 2996 removed, 11 from Clean_OutliersRemoved (2935 obs)
-paste(length(Raw$Specimen_Number)-length(Clean$Specimen_Number), "removed of", length(Raw$Specimen_Number), "shells")
-
-# Validation check for NA values for final data set
+## Validation check for NA values for final data set
 cat("\n\n",
     sum(is.na(Clean$Globosity_WoverL)), "have no globosity ratio,\n", # 0
+    sum(is.na(Clean$Geometric_Mean)), "have no geometric mean,\n", # 99 [iNat]
     sum(is.na(Clean$Width_mm)), "have no width measurement,\n", # 99 [iNat]
     sum(is.na(Clean$Length_mm)), "have no length measurement,\n", # 99 [iNat]
     sum(is.na(Clean$Thickness_mm)), "have no thickness measurement,\n", # 742 = 99 [iNat] + 338 PR + 273 Pleisto
     sum(is.na(Clean$Aperture_mm)), "have no aperture measurement" ) # 742 = 99 [iNat] + 338 PR + 273 Pleisto
+## Order the data
+Clean %>% 
+  group_by(Lot_Number) %>% 
+  summarise(N = length(Specimen_Number))
+Clean %>% 
+  group_by(Epoch) %>% 
+  summarise(N = length(Specimen_Number)) 
+## Re-do of correlation chart
+Clean_CorrMatrix = chart.Correlation(Clean %>% 
+                                       select(morphos)) # much improved
+Clean_CorrMatrix
+dev.copy(png,'Figure2b_Clean.jpg')
+dev.off()
 
-# Order the data
-Clean %>% group_by(Lot_Number) %>% summarise(N = length(Specimen_Number))
-Clean %>% group_by(Epoch) %>% summarise(N = length(Specimen_Number)) 
-
-# Re-do of correlation chart
-chart.Correlation(Clean %>% select(morphos)) # much improved
-
-# Parameters for SoCal points
-counties = c("Sonoma", "San Mateo", "Monterey", "San Luis Obispo", "Santa Barbara", "Ventura", "Los Angeles", "Orange", "San Diego", "Baja California")
-Raw$County = factor(Raw$County, levels=counties) # order counties
-
-socal = c("Santa Barbara", "Ventura", "Los Angeles", "Orange", "San Diego")
-Clean_SoCal = Clean %>% filter(County %in% socal) # 2597 obs for SoCal 
-
-socal_locations = c("SB", "NLA", "LA", "SLA", "SD", "ANA", "SCZI", "SRI", "SMI", "CAT", "SBI", "SNI", "SCI") # socal location order
-Clean_SoCal$Location = factor(Clean_SoCal$Location, levels=socal_locations) # order 
-
-# Distribution of shells by county
-Clean_SoCal %>% group_by(County) %>% summarise(N = length(Epoch)) %>% data.frame 
+# Subset Clean (2908 of 2996 from Raw) to SoCal (2608)
+SoCal = Clean %>% 
+  filter(County %in% 
+           socal) 
+SoCal$Location = factor(SoCal$Location, levels=socal_locations) # order 
+# Distribution of shells by county *most are in LA (1372)
+SoCal %>% 
+  group_by(County) %>% 
+  summarise(N = length(Epoch)) %>% 
+  data.frame 
 # Check correlation for SoCal subset
-chart.Correlation(Clean_SoCal %>% select(morphos)) # Also looks good
+SoCal_CorrMatrix = chart.Correlation(SoCal %>% 
+                                       select(morphos)) # Also looks good
+SoCal_CorrMatrix
+dev.copy(png,'Figure2b_SoCal.jpg')
+dev.off()
+
+# Subset 
+LA = SoCal %>% 
+  filter(County %in% 
+           la) 
+LA$Location = factor(LA$Location, levels=socal_locations) # order 
+# Check correlation for LA subset
+LA_CorrMatrix = chart.Correlation(LA %>%
+                                    select(morphos)) #
+LA_CorrMatrix
+dev.copy(png,'Figure2b_LA.jpg')
+dev.off()
 ###### Clean-up ######
 
 
-###### Save cleaned-up data for downstream visualization and analysis ######
 
+###### Save cleaned-up data for downstream visualization and analysis ######
 # Data structure for Clean and SoCal subset
 sort(unique(Clean$Collection)) # Unique collections: 9
-sort(unique(Clean$Catalog)) # Unique lots: 379 
-sort(unique(Clean$County)) # Unique counties: 10
-sort(unique(Clean$Location)) # Unique locations: 20
-sort(unique(Clean$Land_Category)) # Unique location types: 3
+sort(unique(Clean$Lot_Number)) # Unique lots: 382 
+sort(unique(Clean$County)) # Unique counties: 9
+sort(unique(Clean$Location)) # Unique locations: 19
+sort(unique(Clean$Coastal_Proximity)) # Unique location types: 2
 sort(unique(Clean$Habitat)) # Unique habitats: 4
 sort(unique(Clean$Depth)) # Unique depths: 3
 
-sort(unique(Clean_SoCal$Collection)) # Unique collections: 9
-sort(unique(Clean_SoCal$Catalog)) # Unique lots: 333 
-sort(unique(Clean_SoCal$County)) # Unique counties: 5
-sort(unique(Clean_SoCal$Location)) # Unique locations: 13
+sort(unique(SoCal$Collection)) # Unique collections: 9
+sort(unique(SoCal$Lot_Number)) # Unique lots: 339
+sort(unique(SoCal$County)) # Unique counties: 4
+sort(unique(SoCal$Location)) # Unique locations: 13
 
 write.csv(Clean, file = "SupplementalTable3_Data-Clean.csv")
-write.csv(Clean_SoCal, file = "SupplementalTable4_Data-SoCal.csv") 
+write.csv(SoCal, file = "SupplementalTable4_Data-SoCal.csv") 
+
 # Validation check 
 Clean <- read.csv(text=getURL("https://raw.githubusercontent.com/MichaelMalloy/C_californicus_Morphology/master/SupplementalTable3_Data-Clean.csv")) 
-Clean_SoCal <- read.csv(text=getURL("https://raw.githubusercontent.com/MichaelMalloy/C_californicus_Morphology/master/SupplementalTable4_Data-SoCal.csv")) 
+SoCal <- read.csv(text=getURL("https://raw.githubusercontent.com/MichaelMalloy/C_californicus_Morphology/master/SupplementalTable4_Data-SoCal.csv")) 
+
 
 ###### Save cleaned-up data for downstream visualization and analysis ######
 
 # Subset data by Epoch to color code points
 Anthro = subset(Clean, Epoch=="Anthropocene") # 1492
-Holo = subset(Clean, Epoch=="Holocene") # 1138
+Holo = subset(Clean, Epoch=="Holocene") # 1106
 Pleisto = subset(Clean, Epoch=="Pleistocene") # 305
+
+Anthro_SoCal = subset(SoCal, Epoch=="Anthropocene") # 1366
+Holo_SoCal = subset(SoCal, Epoch=="Holocene") # 1020
+Pleisto_SoCal = subset(SoCal, Epoch=="Pleistocene") # 211
 
 ```
 
 Figure 1a-b: Maps of shell locations (Clean and SoCal Data) 
 ```{r}
 
-# install.packages("ggplot2")
-library("ggplot2")
-# packageVersion("ggplot2") # v3.1.0.9000
-# devtools::install_github("dkahle/ggmap") 
+# Need packages for map coordinates
+## if(!requireNamespace("devtools")) install.packages("devtools")
+## devtools::install_github("dkahle/ggmap")
 library("ggmap")
-# packageVersion("ggmap") # v3.0.0.900
-# install.packages("rgdal")
+## packageVersion("ggmap") # v3.0.0
+## install.packages("rgdal")
 library("rgdal")
-# packageVersion("rgdal") # v1.3.6
+## packageVersion("rgdal") # v1.4.8
+# Need package for plots of maps
+## install.packages("ggplot2")
+library("ggplot2")
+## packageVersion("ggplot2") # v3.2.1
+# Need package for gridding maps as one figure
+## install.packages("cowplot")
+library("cowplot")
+## packageVersion("cowplot") # v1.0.0
 
 # This code is personalized by account and only runs if you have a key
-# Instructions:https://github.com/dkahle/ggmap
-# Visit your personal Google Maps Platform to retrieve key if you have one
-# ggmap::register_google(key = " ") 
+## Instructions: https://github.com/dkahle/ggmap
+## Visit your personal Google Maps Platform to retrieve key if you have one
+## ggmap::register_google(key = " ") 
 
 # Load polygons for ecoregions and call them after downloaded in your folder 
-# shape files from http://www.marineregions.org/ (also in repo)
+## shape files from http://www.marineregions.org/ (also in repo)
 NC_poly=readOGR( "northern_ecoregions" , layer="ecoregions") 
 SCB_poly=readOGR( "southern_ecoregions" , layer="ecoregions") 
 MT_poly=readOGR( "magdaelena_ecoregions" , layer="ecoregions") 
 
 # Figure 1a
-# Parameters for All points
+## Parameters for All points
 All_bbox <- make_bbox(lat = Latitude, lon = Longitude, data = Clean)
 All_bbox
-#       left     bottom      right        top 
-#   -122.9015   25.8435 -114.7285   38.7465 
-
+##     left        bottom    right       top 
+##     -122.786    27.359    -114.734    37.721 
 All=get_map(location=c(-125,20,-105,40), # adjust to include regions
             zoom = 5, 
             maptype = "terrain") 
-
-# Create box for zoom of SoCal
+## Create box for zoom of SoCal
 SoCal_box = data.frame(x=c(-121,-121,-116.5,-116.5,-121), 
        y=c(35,32,32,35,35)) 
-
-# Plot map
+## Plot map
 Clean_map = ggmap(All) +
   geom_polygon(data = NC_poly, aes(x = long, y = lat),
                fill = "white", alpha = 0.5) + # white
@@ -223,28 +265,28 @@ Clean_map = ggmap(All) +
   geom_point(data = Key, aes(x = Longitude, y = Latitude), # asbsent data
              color = "#FC4E07", # orange
              shape = 4,
-             size = 1.5) + # manually added Punta Abreojos white circle
+             size = 1.5) + # manually add Punta Abreojos white circle
   geom_path(data=SoCal_box, aes(x,y), color="black", lwd=1) + # insert box
   labs(x="Longitude", y="Latitude") 
 Clean_map
-ggsave("Figure1a_Data-Clean_Map.png", dpi = 800)
 
 # Figure 1b
-Anthro_SoCal = subset(Clean_SoCal, Epoch=="Anthropocene") # 1366
-Holo_SoCal = subset(Clean_SoCal, Epoch=="Holocene") # 1020
-Pleisto_SoCal = subset(Clean_SoCal, Epoch=="Pleistocene") # 211
-
-SoCal_bbox = make_bbox(lat = Latitude, lon = Longitude, data = Clean_SoCal)
+SoCal_bbox = make_bbox(lat = Latitude, lon = Longitude, data = SoCal)
 SoCal_bbox
-#       left     bottom      right        top 
-#      -120.6695   32.4425 -116.9405   34.5875  
+##    left        bottom    right       top
+##    -120.6685   32.4635 -116.9615   34.5865 
 
 SoCal=get_map(location=c(-121,32,-116.5,35), 
             zoom = 7, 
             maptype = "satellite") 
 
-CleanSoCal_map = ggmap(SoCal) +
-  stat_density_2d(data = Clean_SoCal, # density
+SoCal$Latitude = as.numeric(SoCal$Latitude)
+SoCal$Longitude = as.numeric(SoCal$Longitude)
+
+SoCal = data.frame(SoCal)
+
+SoCal_map = ggmap(SoCal) +
+  stat_density_2d(data = SoCal, # density
                   aes(x = Longitude,
                       y = Latitude,
                       fill = stat(level)),
@@ -266,28 +308,97 @@ CleanSoCal_map = ggmap(SoCal) +
              size = 2) + 
     geom_path(data=SoCal_box, aes(x,y), color="black", lwd=1) + # insert box
   labs(x="Longitude", y="Latitude")
-CleanSoCal_map
+SoCal_map
+
+
 ggsave("Figure1b_Data-Clean-SoCal_Map.png", dpi = 800)
+
+
+ggsave("Figure1a_Data-Clean_Map.png", dpi = 800)
+
+##### Create Map (Figure 1a-b) #####
+#  Need a personalized account with API key (map key) for Google maps
+## Instructions: https://github.com/dkahle/ggmap
+## ggmap::register_google(key = " ") 
+### More helpful info: https://www.littlemissdata.com/blog/maps 
+
+# Figure 1a: Larger map
+## Parameters for All points
+All_bbox <- make_bbox(lat = Latitude, lon = Longitude, data = df)
+All_bbox # Informs us what to set for parameters
+##     left        bottom    right       top 
+##     -122.786    27.359    -114.734    37.721 
+All=get_map(location=c(-129,20,-105,42), # adjust to include regions
+            zoom = 5, 
+            maptype = "terrain") # can adjust this type as well
+## Create box for zoom of SoCal
+SoCal_box = data.frame(x=c(-121,-121,-116.5,-116.5,-121), 
+       y=c(35,32,32,35,35)) 
+## Plot map 
+Figure1a = ggmap(All) + # Google map of parameters
+  geom_polygon(data = NC_poly, aes(x = long, y = lat), # polygons (shape files)
+               fill = "white", alpha = 0.5) + 
+  geom_polygon(data = SCB_poly, aes(x = long, y = lat),
+               fill = "blue", alpha = 0.3) +
+  geom_polygon(data = MT_poly, aes(x = long, y = lat),
+               fill = "#666666", alpha = 0.5) + # grey
+  stat_density_2d(data = df, # hypothetical population density
+                  aes(x = Longitude,
+                      y = Latitude,
+                      fill = stat(level)),
+                  alpha = .25,
+                  bins = 250, # can adjust this for resolution
+                  geom = "polygon") +
+  scale_fill_gradientn(colors = "black") + # fills density layers as black 
+  scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) + # colors by Epoch
+  geom_point(data = df, aes(x = Longitude, y = Latitude, color = Epoch), 
+             alpha = 0.15,
+             size = 1) + # layers points
+  geom_path(data=SoCal_box, aes(x,y), color="black", lwd=1) + # insert box
+  labs(x="Longitude", y="Latitude") +
+  theme(legend.position="none")
+Figure1a
+
+# Figure 1b: Zoom-in of SoCal
+SoCal=get_map(location=c(-121,32,-116.5,35), # adjust based on SoCal_box
+            maptype = "terrain-background") # can adjust this type as well
+## Plot map
+Figure1b = ggmap(SoCal) +
+  geom_polygon(data = NC_poly, aes(x = long, y = lat),
+               fill = "white", alpha = 0.5) + # white
+  geom_polygon(data = SCB_poly, aes(x = long, y = lat),
+               fill = "blue", alpha = 0.3) + # blue
+    stat_density_2d(data = df, # density
+                  aes(x = Longitude,
+                      y = Latitude,
+                      fill = stat(level)),
+                  alpha = .25,
+                  bins = 250,
+                  geom = "polygon") +
+  scale_fill_gradientn(colors = "black") + # color fill, black
+  scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) +
+  geom_point(data = df, aes(x = Longitude, y = Latitude, color = Epoch), 
+             alpha = 0.15,
+             size = 1) +
+  theme(axis.title.x=element_blank(), axis.title.y=element_blank())
+Figure1b # Note the ecoregions cut-out if polygon not fully included
+
+# Grid using cowplot, and save
+Figure1 = plot_grid(Figure1a, Figure1b, labels = c("A", "B"), label_size=12)
+Figure1   
+
+ggsave("Figure1.png", dpi = 800) 
+
+##### Create Map (Figure 1a-b) #####
 
 ```
 
-Q1) Are shell size and shape independent or dependent metrics of each other? Independent
-Figure 2b: Allometry - shell shape vs size (Clean_New) 
+Figure 2b: Are shell size, mass, or shape independent or dependent metrics of each other?
 ```{r}
-
-# Filter out set of specimens more in the open ocean and south of the rest + most northern
-min(Clean$Latitude) # 26.43
-max(Clean$Latitude) # 38.16
-Clean_New = Clean %>% 
-  filter(Latitude > 26.43) %>% # 2935 - 2902 = 33 obs removed
-  filter(Latitude < 38.16) # 2902 - 2897 = 5 obs removed
 
 # install.packages("GGally")
 library(GGally)
 # packageVersion("GGally") # v1.4.0
-# install.packages("ggplot2")
-library(ggplot2)
-# packageVersion("ggplot2") # v3.1.0
 
 # Create a function for including linear regression line
 my_fn <- function(data, mapping, ...){
@@ -298,9 +409,9 @@ my_fn <- function(data, mapping, ...){
 }
 
 # Figure 2b
-Fig2b = Clean_New[,c("Epoch", "Length_mm", "Width_mm", "Globosity_WoverL")] 
+Fig2b = Clean[,c("Epoch", "Length_mm", "Width_mm", "Globosity_WoverL", "Geometric_Mean")] 
 # Rename columns
-names(Fig2b) = c("Epoch", "Length", "Width", "Globosity") 
+names(Fig2b) = c("Epoch", "Length (size)", "Width (size)", "Globosity (shape)", "geomM (mass)") 
 # Create figure (automatically excludes NAs)
 Fig2b_chart = ggpairs(Fig2b, aes(color = Epoch, alpha = 0.85), lower = list(continuous = my_fn), upper = list(continuous = wrap("cor", size = 4.25)))
 # Change colors manually with a loop through each plot
@@ -317,19 +428,26 @@ Fig2b_chart +
 ggsave("Figure2b_Data-Clean-New_Shell-Allometry.png", dpi = 800)
 
 # Statistics
+names(Fig2b) = c("Epoch", "Length", "Width", "Globosity", "geomM") 
 summary(lm(Length ~ Width, data = Fig2b)) # Radj = 0.9534, p < 2.2e-16
-summary(lm(Length ~ Globosity, data = Fig2b)) # Radj = 0.08497, p < 2.2e-16
-summary(lm(Width ~ Globosity, data = Fig2b)) # Radj = 0.007467, p = 2.854e-06  
+summary(lm(Length ~ Globosity, data = Fig2b)) # Radj = 0.0853, p < 2.2e-16
+summary(lm(Width ~ Globosity, data = Fig2b)) # Radj = 0.007822, p = 2.796e-06 
+summary(lm(Length ~ geomM, data = Fig2b)) # Radj = 0.9884, p < 2.2e-16
+summary(lm(Width ~ geomM, data = Fig2b)) # Radj = 0.988, p < 2.2e-16
+summary(lm(Globosity ~ geomM, data = Fig2b)) # Radj = 0.03698, p < 2.2e-16
 
-# Length = Width, globosity independent of length and width
-## shape = globosity
-## size = length=width (better to go with width as size over length given lm results)
-### Though, barely a difference in the larger scope of Radj (for L ~ g vs W ~ g)
+# Length = Width, dependent on each other and synonymous with size
+# Globosity (shape) is an independent metric of size 
+## Width slightly more independent (horizontal line to globosity) than Length
+### Thus, use Width as proxy for size 
+# geomM (mass) is synonymous with size in this instance, and independent of shape
+## Do we want to then only use geomM (mass) and globosity (shape)?
+### Note Width is still the most horizontal of the 3 (Length, Width, geomM) for Fig 2b ()
 
 ```
 
 Q2) Do size/shape vary by epoch in relation to latitude or temperature? Yes.
-Figure 3a-d, Supp Figure 1: Comparison of size and shape for Latitude vs SST (Clean_New)
+Figure 3a-d, Supp Figure 1: Comparison of size and shape for Latitude vs SST (Clean)
 ```{r}
 
 # Regression Plot function for y = mx + b
@@ -347,7 +465,7 @@ ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) 
 }
 
 # Supplemental Figure 1: What is the relationship between latitude and SST?
-SuppFig1 = ggplot(data = Clean_New, 
+SuppFig1 = ggplot(data = Clean, 
                       aes(x = Latitude, y = Mean_SST,
                       color = Epoch,
                       alpha = 0.4)) +
@@ -365,18 +483,18 @@ SuppFig1 +
   theme_classic() 
 ggsave("SuppFig1_Data-Clean-New_Latitude-MeanSST.png", dpi = 800)
 # Regression by Epoch
-ggplotRegression(lm(Mean_SST ~ Latitude, data = Clean_New))
+ggplotRegression(lm(Mean_SST ~ Latitude, data = Clean))
 # ** y = 38.222 - 0.660x, r^2 = 0.157, p = 5.302 x 10^-110
-ggplotRegression(lm(Mean_SST ~ Latitude, data = subset(Clean_New, Epoch=="Anthropocene")))
+ggplotRegression(lm(Mean_SST ~ Latitude, data = subset(Clean, Epoch=="Anthropocene")))
 # ** y = 43.679 - 0.810x, r^2 = 0.413, p = 1.487 x 10^-174
-ggplotRegression(lm(Mean_SST ~ Latitude, data = subset(Clean_New, Epoch=="Holocene")))
+ggplotRegression(lm(Mean_SST ~ Latitude, data = subset(Clean, Epoch=="Holocene")))
 # ** y = 35.303 - 0.565x, r^2 = 0.259, p = 7.868 x 10^-74
-ggplotRegression(lm(Mean_SST ~ Latitude, data = subset(Clean_New, Epoch=="Pleistocene")))
+ggplotRegression(lm(Mean_SST ~ Latitude, data = subset(Clean, Epoch=="Pleistocene")))
 # ** y = 32.702 - 0.591, r^2 = 0.457, p = 1.704 x 10^-42
 
 # Figure 3a-d (size is represented as Width) 
-Fig3a = ggplot(data = Clean_New, 
-                      aes(x = Latitude, y = Width_mm,
+Fig3a = ggplot(data = Clean, 
+                      aes(x = Latitude, y = Length_mm,
                       color = Epoch,
                       alpha = 0.4)) +
   annotate("rect",ymin=-Inf,ymax=Inf,xmin=32.56,xmax=34.49, # adjust by transformation
@@ -388,17 +506,15 @@ Fig3a = ggplot(data = Clean_New,
   geom_point(aes(color = Epoch)) + 
   geom_errorbar(stat="summary", fun.data="mean_se", fun.args = list(mult = 1.96), width=0) +
     geom_smooth(aes(color = Epoch, fill = Epoch), method=lm, se = TRUE, alpha = 0.35) + # 95% confidence interval
-  labs(x="Latitude", y="Size (Width mm)")
-Fig3a +
-  theme_classic() 
-ggsave("Fig3a_Data-Clean_New_Latitude-Width.png", dpi = 800)
+  labs(x="Latitude", y="Size (Length mm)") +
+  theme(legend.position = "none") 
 # Regression by Epoch
-ggplotRegression(lm(Latitude ~ Width_mm, data = Clean_New))
+ggplotRegression(lm(Latitude ~ Length_mm, data = Clean))
 # ** y = 32.837 + 0.057x, r^2 = 0.043, p = 1.056 x 10^-28
 ## Relationships by Epoch are not important based on global interactive model results (Tab 1)
 
-Fig3b = ggplot(data = Clean_New, 
-                      aes(x = Mean_SST, y = Width_mm,
+Fig3b = ggplot(data = Clean, 
+                      aes(x = Mean_SST, y = Length_mm,
                       color = Epoch,
                       alpha = 0.4)) +
   scale_color_manual(values=c("#FC4E07", "#E7B800", "#00AFBB")) +
@@ -408,21 +524,29 @@ Fig3b = ggplot(data = Clean_New,
   geom_point(aes(color = Epoch)) + 
   geom_errorbar(stat="summary", fun.data="mean_se", fun.args = list(mult = 1.96), width=0) +
     geom_smooth(aes(color = Epoch, fill = Epoch), method=lm, se = TRUE, alpha = 0.35) + # 95% confidence interval
-  labs(x="Mean SST", y="Size (Width mm)")
-Fig3b +
-  theme_classic() 
-ggsave("Fig3b_Data-Clean_New_MeanSST-Width.png", dpi = 800)
+  labs(x="Mean SST", y="") +
+  theme(legend.position = "none") 
 # Regression by Epoch
-ggplotRegression(lm(Mean_SST ~ Width_mm, data = Clean_New))
+ggplotRegression(lm(Mean_SST ~ Length_mm, data = Clean))
 # y = 16.050 + 0.005x, r^2 = 2.267 x 10^-4, p = 0.545
-ggplotRegression(lm(Mean_SST ~ Width_mm, data = subset(Clean_New, Epoch=="Anthropocene")))
+ggplotRegression(lm(Mean_SST ~ Length_mm, data = subset(Clean, Epoch=="Anthropocene")))
 # y = 16.663 - 7.955x10^-5x, r^2 = -0.001, p = 0.993
-ggplotRegression(lm(Mean_SST ~ Width_mm, data = subset(Clean_New, Epoch=="Holocene")))
+ggplotRegression(lm(Mean_SST ~ Length_mm, data = subset(Clean, Epoch=="Holocene")))
 # ** y = 17.009 - 0.065x, r^2 = 0.057, p = 7.759 x 10^-26
-ggplotRegression(lm(Mean_SST ~ Width_mm, data = subset(Clean_New, Epoch=="Pleistocene")))
+ggplotRegression(lm(Mean_SST ~ Length_mm, data = subset(Clean, Epoch=="Pleistocene")))
 # y = 13.191 - 0.021x, r^2 = 0.001, p = 0.255
 
-Fig3c = ggplot(data = Clean_New, 
+Figure3 = plot_grid(Fig3a , Fig3b, labels = c("A", "B"), label_size=12)
+ggsave("Fig3_Length.png", dpi = 800)
+
+
+
+
+
+
+
+
+Fig3c = ggplot(data = Clean, 
                       aes(x = Latitude, y = Globosity_WoverL,
                       color = Epoch,
                       alpha = 0.4)) +
@@ -438,18 +562,18 @@ Fig3c = ggplot(data = Clean_New,
   labs(x="Latitude", y="Shape (Globosity, W/L)")
 Fig3c +
   theme_classic() 
-ggsave("Fig3c_Data-Clean_New_Latitude-Globosity.png", dpi = 800)
+ggsave("Fig3c_Data-Clean_Latitude-Globosity.png", dpi = 800)
 # Regression by Epoch
-ggplotRegression(lm(Latitude ~ Globosity_WoverL, data = Clean_New))
+ggplotRegression(lm(Latitude ~ Globosity_WoverL, data = Clean))
 # ** y = 31.951 + 2.645x, r^2 = 0.013, p = 8.232e-10
-ggplotRegression(lm(Latitude ~ Globosity_WoverL, data = subset(Clean_New, Epoch=="Anthropocene")))
+ggplotRegression(lm(Latitude ~ Globosity_WoverL, data = subset(Clean, Epoch=="Anthropocene")))
 # ** y = 31.235 + 3.662x, r^2 = 0.028, p = 5.554e-11
-ggplotRegression(lm(Latitude ~ Globosity_WoverL, data = subset(Clean_New, Epoch=="Holocene")))
+ggplotRegression(lm(Latitude ~ Globosity_WoverL, data = subset(Clean, Epoch=="Holocene")))
 # y = 33.297 + 0.697x, r^2 = -1.745e-5, p = 0.322
-ggplotRegression(lm(Latitude ~ Globosity_WoverL, data = subset(Clean_New, Epoch=="Pleistocene")))
+ggplotRegression(lm(Latitude ~ Globosity_WoverL, data = subset(Clean, Epoch=="Pleistocene")))
 # ** y = 36.22 - 5.014x, r^2 = 0.025, p = 0.004
 
-Fig3d = ggplot(data = Clean_New, 
+Fig3d = ggplot(data = Clean, 
                       aes(x = Mean_SST, y = Globosity_WoverL,
                       color = Epoch,
                       alpha = 0.4)) +
@@ -463,22 +587,36 @@ Fig3d = ggplot(data = Clean_New,
   labs(x="Mean SST", y="Shape (Globosity, W/L)")
 Fig3d +
   theme_classic() 
-ggsave("Fig3d_Data-Clean_New_MeanSST-Globosity.png", dpi = 800)
+ggsave("Fig3d_Data-Clean_MeanSST-Globosity.png", dpi = 800)
 # Regression by Epoch
-ggplotRegression(lm(Mean_SST ~ Globosity_WoverL, data = Clean_New))
+ggplotRegression(lm(Mean_SST ~ Globosity_WoverL, data = Clean))
 # ** y = 17.072 - 1.619x, r^2 = 0.001, p = 0.024
-ggplotRegression(lm(Mean_SST ~ Globosity_WoverL, data = subset(Clean_New, Epoch=="Anthropocene")))
+ggplotRegression(lm(Mean_SST ~ Globosity_WoverL, data = subset(Clean, Epoch=="Anthropocene")))
 # ** y = 21.187 - 7.901x, r^2 = 0.083, p = 4.988e-30
-ggplotRegression(lm(Mean_SST ~ Globosity_WoverL, data = subset(Clean_New, Epoch=="Holocene")))
+ggplotRegression(lm(Mean_SST ~ Globosity_WoverL, data = subset(Clean, Epoch=="Holocene")))
 # ** y = 13.424 + 4.866x, r^2 = 0.035, p = 3.155e-10
-ggplotRegression(lm(Mean_SST ~ Globosity_WoverL, data = subset(Clean_New, Epoch=="Pleistocene")))
+ggplotRegression(lm(Mean_SST ~ Globosity_WoverL, data = subset(Clean, Epoch=="Pleistocene")))
 # ** y = 13.21 - 0.237x, r^2 = -0.003, p = 0.875
 
-ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean_New))) # p = 0.923
-ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean_New, Epoch=="Anthropocene"))) # p < 0.0001
-ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean_New, Epoch=="Holocene")))
+
+
+
+ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean))) # p = 0.923
+ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean, Epoch=="Anthropocene"))) # p < 0.0001
+ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean, Epoch=="Holocene")))
 # p < 0.0001
-ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean_New, Epoch=="Pleistocene"))) # p = 0.03
+ggplotRegression(lm(Mean_SST ~ Coastal_Proximity, data = subset(Clean, Epoch=="Pleistocene"))) # p = 0.03
+
+
+# Regression by Epoch
+ggplotRegression(lm(Mean_SST ~ Geometric_Mean, data = Clean))
+# 
+ggplotRegression(lm(Mean_SST ~ Geometric_Mean, data = subset(Clean, Epoch=="Anthropocene")))
+#
+ggplotRegression(lm(Mean_SST ~ Geometric_Mean, data = subset(Clean, Epoch=="Holocene")))
+# **
+ggplotRegression(lm(Mean_SST ~ Geometric_Mean, data = subset(Clean, Epoch=="Pleistocene")))
+# 
 
 ```
 
@@ -543,26 +681,41 @@ max(Clean_New$Width_mm) # 23.65
 min(Clean_New$Globosity_WoverL) # 0.43
 max(Clean_New$Globosity_WoverL) # 0.7
 
-Fig4a <- ggplot(subset(Clean_New, Epoch=="Pleistocene"), aes(x = Ecoregion, y = Width_mm, fill = Coastal_Proximity)) +
+
+
+
+
+
+
+
+
+library("ggsignif")
+library("ggpubr")
+
+Fig4a <- ggplot(subset(Clean, Epoch=="Pleistocene"), aes(x = Ecoregion, y = Geometric_Mean, fill = Coastal_Proximity)) +
   geom_boxplot(alpha=0.7) +
   coord_cartesian(ylim = c(3,24)) +
-  scale_y_continuous(name = "Size (Width mm)") +
+  scale_y_continuous(name = "Mass (Geometric Mean)") +
   scale_x_discrete(name = "Ecoregion") +
   ggtitle("(a) Pleistocene") +
+  geom_signif(comparisons=list("Ecoregion","Coastal_Proximity"), map_signif_level=TRUE) + 
+  stat_compare_means(method = "t.test") +
   theme_bw() +
   theme(plot.title = element_text(size = 14, family = "Tahoma", face = "bold"),
         text = element_text(size = 12, family = "Tahoma"),
         axis.title = element_text(face="bold"),
         axis.text.x=element_text(size = 11)) 
 Fig4a
-ggsave("Fig4a_Data-Clean-New_Ecoregion-Proximity-Width.png", dpi = 800)
 
-Fig4b <- ggplot(subset(Clean_New, Epoch=="Holocene"), aes(x = Ecoregion, y = Width_mm, fill = Coastal_Proximity)) +
+
+Fig4b <- ggplot(subset(Clean, Epoch=="Holocene"), aes(x = Ecoregion, y = Geometric_Mean, fill = Coastal_Proximity)) +
   geom_boxplot(alpha=0.7) +
   coord_cartesian(ylim = c(3,24)) +
   scale_y_continuous(name = "Size (Width mm)") +
   scale_x_discrete(name = "Ecoregion") +
   ggtitle("(b) Holocene") +
+  geom_signif(comparisons=list("Ecoregion"), map_signif_level=TRUE) + 
+  stat_compare_means(method = "t.test") +
   theme_bw() +
   theme(plot.title = element_text(size = 14, family = "Tahoma", face = "bold"),
         text = element_text(size = 12, family = "Tahoma"),
@@ -571,7 +724,7 @@ Fig4b <- ggplot(subset(Clean_New, Epoch=="Holocene"), aes(x = Ecoregion, y = Wid
 Fig4b
 ggsave("Fig4b_Data-Clean-New_Ecoregion-Proximity-Width.png", dpi = 800)
 
-Fig4c <- ggplot(subset(Clean_New, Epoch=="Anthropocene"), aes(x = Ecoregion, y = Width_mm, fill = Coastal_Proximity)) +
+Fig4c <- ggplot(subset(Clean, Epoch=="Anthropocene"), aes(x = Ecoregion, y = Geometric_Mean, fill = Coastal_Proximity)) +
   geom_boxplot(alpha=0.7) +
   coord_cartesian(ylim = c(3,24)) +
   scale_y_continuous(name = "Size (Width mm)") +
@@ -585,7 +738,7 @@ Fig4c <- ggplot(subset(Clean_New, Epoch=="Anthropocene"), aes(x = Ecoregion, y =
 Fig4c
 ggsave("Fig4c_Data-Clean-New_Ecoregion-Proximity-Width.png", dpi = 800)
 
-Fig4d <- ggplot(subset(Clean_New, Epoch=="Pleistocene"), aes(x = Ecoregion, y = Globosity_WoverL, fill = Coastal_Proximity)) +
+Fig4d <- ggplot(subset(Clean, Epoch=="Pleistocene"), aes(x = Ecoregion, y = Globosity_WoverL, fill = Coastal_Proximity)) +
   geom_boxplot(alpha=0.7) +
   coord_cartesian(ylim = c(.4,.72)) +
   scale_y_continuous(name = "Shape (Globosity, W/L)") +
@@ -599,7 +752,7 @@ Fig4d <- ggplot(subset(Clean_New, Epoch=="Pleistocene"), aes(x = Ecoregion, y = 
 Fig4d
 ggsave("Fig4d_Data-Clean-New_Ecoregion-Proximity-Width.png", dpi = 800)
 
-Fig4e <- ggplot(subset(Clean_New, Epoch=="Holocene"), aes(x = Ecoregion, y = Globosity_WoverL, fill = Coastal_Proximity)) +
+Fig4e <- ggplot(subset(Clean, Epoch=="Holocene"), aes(x = Ecoregion, y = Globosity_WoverL, fill = Coastal_Proximity)) +
   geom_boxplot(alpha=0.7) +
   coord_cartesian(ylim = c(.4,.72)) +
   scale_y_continuous(name = "Shape (Globosity, W/L)") +
@@ -613,7 +766,7 @@ Fig4e <- ggplot(subset(Clean_New, Epoch=="Holocene"), aes(x = Ecoregion, y = Glo
 Fig4e
 ggsave("Fig4e_Data-Clean-New_Ecoregion-Proximity-Width.png", dpi = 800)
 
-Fig4f <- ggplot(subset(Clean_New, Epoch=="Anthropocene"), aes(x = Ecoregion, y = Globosity_WoverL, fill = Coastal_Proximity)) +
+Fig4f <- ggplot(subset(Clean, Epoch=="Anthropocene"), aes(x = Ecoregion, y = Globosity_WoverL, fill = Coastal_Proximity)) +
   geom_boxplot(alpha=0.7) +
   coord_cartesian(ylim = c(.4,.72)) +
   scale_y_continuous(name = "Shape (Globosity, W/L)") +
@@ -626,6 +779,11 @@ Fig4f <- ggplot(subset(Clean_New, Epoch=="Anthropocene"), aes(x = Ecoregion, y =
         axis.text.x=element_text(size = 11)) 
 Fig4f
 ggsave("Fig4f_Data-Clean-New_Ecoregion-Proximity-Width.png", dpi = 800)
+
+
+
+Fig5a = plot_grid(sys.plot, dia.plot, labels = "a", label_size=12)
+Fig5a   
 
 ```
 
