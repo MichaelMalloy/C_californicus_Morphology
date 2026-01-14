@@ -13,6 +13,228 @@ https://github.com/MichaelMalloy/C_californicus_Morphology
 Contributors of data by order of contribution: MM, SUH, SC, CAO, JKK, WFG
 Contributors of code by order of contribution: SUH, LL, MM, SS, CAO
 
+```{r}
+# Data Integration Script for C. californicus Morphology Study
+# Author: Based on original script by Malloy and Ul-Hasan et al.
+# Date: 2026-01-15
+# Purpose: Integrate SupplementalTable2_Data-iNat-Raw.csv into existing dataset
+
+library(tidyverse)
+library(RCurl)
+
+# ---------------------------
+# 1. LOAD EXISTING DATA
+# ---------------------------
+
+# Load original raw data from GitHub
+Raw_original <- read.csv(text = getURL("https://raw.githubusercontent.com/MichaelMalloy/C_californicus_Morphology/master/SupplementalTable2_Data-Raw.csv"))
+
+# Load the Data Key for reference
+Key <- read.csv(text = getURL("https://raw.githubusercontent.com/MichaelMalloy/C_californicus_Morphology/master/SupplementalTable1_Data-Key.csv"))
+
+# ---------------------------
+# 2. LOAD AND PREPARE NEW iNat DATA
+# ---------------------------
+
+# Assuming SupplementalTable2_Data-iNat-Raw.csv is in your working directory
+# If not, adjust the path accordingly
+iNat_new <- read.csv("SupplementalTable2_Data-iNat-Raw.csv", stringsAsFactors = FALSE)
+
+# Clean the column names to match the original dataset
+names(iNat_new) <- gsub("observation_", "", names(iNat_new))
+names(iNat_new) <- gsub("latidude", "latitude", names(iNat_new))
+
+# Create a mapping function for iNaturalist data transformation
+transform_iNat_data <- function(iNat_df) {
+  
+  # Initialize an empty dataframe with the structure of Raw_original
+  transformed <- data.frame(matrix(ncol = ncol(Raw_original), nrow = nrow(iNat_df)))
+  colnames(transformed) <- colnames(Raw_original)
+  
+  # Fill in the transformed dataframe
+  transformed$Specimen_Number <- max(Raw_original$Specimen_Number, na.rm = TRUE) + 
+    seq_len(nrow(iNat_df))
+  transformed$Collection <- "iNat"
+  transformed$Lot_Number <- paste0("iNat_", iNat_df$id)
+  transformed$Collector <- iNat_df$login
+  transformed$Latitude <- iNat_df$latitude
+  transformed$Longitude <- iNat_df$longitude
+  
+  # Convert length and width from the iNat data (appear to be in different units)
+  # Based on your original script, iNat data had different measurement units
+  # You'll need to calibrate these conversions based on your actual data
+  transformed$Length_mm <- iNat_df$length / 10  # Example conversion - ADJUST AS NEEDED
+  transformed$Width_mm <- iNat_df$width / 10    # Example conversion - ADJUST AS NEEDED
+  
+  # Calculate derived metrics (following original script logic)
+  transformed$Geometric_Mean <- sqrt(transformed$Length_mm * transformed$Width_mm)
+  transformed$Globosity_WoverL <- transformed$Width_mm / transformed$Length_mm
+  
+  # Set epoch to Anthropocene for iNaturalist observations
+  transformed$Epoch <- "Anthropocene"
+  
+  # Parse observation date
+  obs_date <- as.Date(iNat_df$date, format = "%m/%d/%y")
+  transformed$Year <- as.numeric(format(obs_date, "%Y"))
+  transformed$Decade <- floor(transformed$Year / 10) * 10
+  transformed$Month <- as.numeric(format(obs_date, "%m"))
+  
+  # Assign season based on month (following original script convention)
+  transformed$Season <- case_when(
+    transformed$Month %in% c(12, 1, 2) ~ "Winter",
+    transformed$Month %in% c(3, 4, 5) ~ "Spring",
+    transformed$Month %in% c(6, 7, 8) ~ "Summer",
+    transformed$Month %in% c(9, 10, 11) ~ "Fall",
+    TRUE ~ NA_character_
+  )
+  
+  # Determine county based on latitude (simplified - you may need more precise geocoding)
+  transformed$County <- case_when(
+    transformed$Latitude >= 38.0 ~ "Sonoma",
+    transformed$Latitude >= 37.5 ~ "San Mateo",
+    transformed$Latitude >= 36.0 ~ "Monterey",
+    transformed$Latitude >= 35.5 ~ "San Luis Obispo",
+    transformed$Latitude >= 34.5 ~ "Santa Barbara",
+    transformed$Latitude >= 34.0 ~ "Ventura",
+    transformed$Latitude >= 33.5 ~ "Los Angeles",
+    transformed$Latitude >= 33.0 ~ "Orange",
+    transformed$Latitude >= 32.5 ~ "San Diego",
+    TRUE ~ "Baja California"
+  )
+  
+  # Determine ecoregion based on location
+  transformed$Ecoregion <- ifelse(
+    transformed$Latitude > 34.5, 
+    "Northern California", 
+    "Southern California Bight"
+  )
+  
+  # Set coastal proximity (you may need actual coastal distance calculations)
+  transformed$Coastal_Proximity <- "Coastal"  # Default assumption for iNat observations
+  
+  # Set other fields to NA that will need to be populated from other sources
+  na_columns <- c("Site", "SoCal_Group", "Island_Size", "Formation", 
+                  "Mean_SST", "Mean_SST_Sdev", "Aperture_mm", "Thickness_mm",
+                  "Habitat", "Depth", "BRY", "BAR", "LMP", "TWS", "COR", 
+                  "ALG", "SCR", "BOR_TAP", "BOR_STR", "BOR_INC",
+                  "mean_pvolc3", "sd_pvolc3", "zooplankton_n_points_used",
+                  "zooplankton_mean_distance", "fish_total_catch_wt_kg",
+                  "fish_cpue_kg_per_ha_der", "sd_total_catch_wt_kg",
+                  "sd_cpue_kg_per_ha_der", "fish_n_points_used",
+                  "fish_mean_distance", "Population_Density",
+                  "Population_Density_NoBaja", "MPA", "Image_url")
+  
+  for(col in na_columns) {
+    transformed[[col]] <- NA
+  }
+  
+  # Create Location code based on County
+  transformed$Location <- case_when(
+    transformed$County == "San Diego" ~ "SD",
+    transformed$County == "Los Angeles" ~ "LA",
+    transformed$County == "Orange" ~ "ORA",
+    transformed$County == "Ventura" ~ "VEN",
+    transformed$County == "Santa Barbara" ~ "SB",
+    TRUE ~ substr(gsub(" ", "", transformed$County), 1, 3)
+  )
+  
+  return(transformed)
+}
+
+# Transform the new iNaturalist data
+iNat_transformed <- transform_iNat_data(iNat_new)
+
+# ---------------------------
+# 3. MERGE DATASETS
+# ---------------------------
+
+# Combine original and new iNaturalist data
+Raw_combined <- bind_rows(Raw_original, iNat_transformed)
+
+# Reset Specimen_Number to be sequential
+Raw_combined$Specimen_Number <- seq_len(nrow(Raw_combined))
+
+# ---------------------------
+# 4. APPLY ORIGINAL CLEANING PIPELINE
+# ---------------------------
+
+# Replicate the cleaning steps from your original script
+Clean <- Raw_combined %>%
+  # Filter outliers (replicating original logic)
+  filter(ifelse(is.na(Thickness_mm), TRUE, Thickness_mm < 2)) %>%
+  filter(!(Width_mm < 15 & Thickness_mm > 2)) %>%
+  filter(ifelse(is.na(Aperture_mm), TRUE, Aperture_mm < 6)) %>%
+  filter(!(Length_mm > 20 & Aperture_mm < 2)) %>%
+  filter(Width_mm > 2) %>%
+  filter(Globosity_WoverL > 0.42 & Globosity_WoverL < 0.71) %>%
+  # Remove Pliocene specimens
+  filter(!Epoch == "Pliocene") %>%
+  # Filter latitude range
+  filter(Latitude > 26.43 & Latitude < 38.16) %>%
+  # Group by lot and count specimens
+  group_by(Lot_Number) %>%
+  mutate(Specimens_per_Lot = n()) %>%
+  ungroup() %>%
+  # Keep catalogs with >2 in lot and iNat (1 per 'lot')
+  filter(Specimens_per_Lot > 2 | Collection == "iNat")
+
+# ---------------------------
+# 5. CREATE SoCal SUBSET
+# ---------------------------
+
+# Define SoCal counties (from original script)
+socal_counties <- c("Santa Barbara", "Ventura", "Los Angeles", "Orange", "San Diego")
+
+SoCal <- Clean %>%
+  filter(County %in% socal_counties)
+
+# Order the locations
+socal_locations <- c("SB", "NLA", "LA", "SLA", "SD", "ANA", "SCZI", "SRI", "SMI", "CAT", "SBI", "SNI", "SCI")
+SoCal$Location <- factor(SoCal$Location, levels = socal_locations)
+
+# ---------------------------
+# 6. SAVE THE INTEGRATED DATASETS
+# ---------------------------
+
+# Save the integrated datasets
+write.csv(Raw_combined, "SupplementalTable2_Data-Raw-Integrated.csv", row.names = FALSE)
+write.csv(Clean, "SupplementalTable3_Data-Clean-Integrated.csv", row.names = FALSE)
+write.csv(SoCal, "SupplementalTable4_Data-SoCal-Integrated.csv", row.names = FALSE)
+
+# ---------------------------
+# 7. VALIDATION AND SUMMARY
+# ---------------------------
+
+cat("Data Integration Complete!\n")
+cat("=================================\n")
+cat("Original raw data rows:", nrow(Raw_original), "\n")
+cat("New iNaturalist rows:", nrow(iNat_new), "\n")
+cat("Combined raw data rows:", nrow(Raw_combined), "\n")
+cat("Cleaned data rows:", nrow(Clean), "\n")
+cat("SoCal subset rows:", nrow(SoCal), "\n")
+cat("\nCollection breakdown in Clean dataset:\n")
+print(table(Clean$Collection))
+
+cat("\niNaturalist observations by County:\n")
+iNat_by_county <- Clean %>%
+  filter(Collection == "iNat") %>%
+  count(County)
+print(iNat_by_county)
+
+# ---------------------------
+# 8. UPDATE YOUR R MARKDOWN SCRIPT
+# ---------------------------
+
+cat("\nTo use the integrated data in your RMarkdown script, replace:\n")
+cat("Raw <- read.csv(text=getURL(\"https://raw.githubusercontent.com/.../SupplementalTable2_Data-Raw.csv\"))\n")
+cat("With:\n")
+cat("Raw <- read.csv(\"SupplementalTable2_Data-Raw-Integrated.csv\")\n")
+cat("\nOr update the GitHub URL if you upload the integrated file.\n")
+```
+
+
+
+
 Data Clean-up        Post-processing: Raw -> Clean + SoCal       
 *Fig 1a-b            Map of C. californicus range                
 *Fig 2b              Shell allometry (Fig 2a of shell manual)             
