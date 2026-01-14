@@ -1,12 +1,12 @@
 ---
 title: "Bergmann’s Rule across the Pleistocene, Holocene, and Anthropocene in an Eastern Pacific neogastropod, Californiconus californicus (Reeve, 1844) (Gastropoda: Conidae)"
 author: "Malloy and Ul-Hasan et al"
-date: "Feb 19, 2020"
+date: "Jan 14, 2026"
 output:
   pdf_document: default
 ---
 
-Last edited [Sabah Ul-Hasan]: Feb 19, 2020
+Last edited [Sabah Ul-Hasan]: Jan 14, 2026
 
 https://github.com/MichaelMalloy/C_californicus_Morphology
 
