@@ -13,11 +13,15 @@ https://github.com/MichaelMalloy/C_californicus_Morphology
 Contributors of data by order of contribution: MM, SUH, SC, CAO, JKK, WFG
 Contributors of code by order of contribution: SUH, LL, MM, SS, CAO
 
+Data integration and clean-up
 ```{r}
 # Data Integration Script for C. californicus Morphology Study
 # Author: Based on original script by Malloy and Ul-Hasan et al.
 # Date: 2026-01-15
 # Purpose: Integrate SupplementalTable2_Data-iNat-Raw.csv into existing dataset
+
+# install.packages("tidyverse")
+# install.packages("RCurl")
 
 library(tidyverse)
 library(RCurl)
@@ -27,10 +31,10 @@ library(RCurl)
 # ---------------------------
 
 # Load original raw data from GitHub
-Raw_original <- read.csv(text = getURL("https://raw.githubusercontent.com/MichaelMalloy/C_californicus_Morphology/master/SupplementalTable2_Data-Raw.csv"))
+Raw_original <- read.csv(text = getURL("https://raw.githubusercontent.com/sabahzero/C_californicus_Morphology/main/data/Data-iNat-Raw"))
 
 # Load the Data Key for reference
-Key <- read.csv(text = getURL("https://raw.githubusercontent.com/MichaelMalloy/C_californicus_Morphology/master/SupplementalTable1_Data-Key.csv"))
+Key <- read.csv(text = getURL("https://raw.githubusercontent.com/sabahzero/C_californicus_Morphology/main/SupplementalTable1_Data-Key.csv"))
 
 # ---------------------------
 # 2. LOAD AND PREPARE NEW iNat DATA
@@ -38,7 +42,7 @@ Key <- read.csv(text = getURL("https://raw.githubusercontent.com/MichaelMalloy/C
 
 # Assuming SupplementalTable2_Data-iNat-Raw.csv is in your working directory
 # If not, adjust the path accordingly
-iNat_new <- read.csv("SupplementalTable2_Data-iNat-Raw.csv", stringsAsFactors = FALSE)
+iNat_new <- read.csv("https://raw.githubusercontent.com/sabahzero/C_californicus_Morphology/main/data/Data-Raw.csv", stringsAsFactors = FALSE)
 
 # Clean the column names to match the original dataset
 names(iNat_new) <- gsub("observation_", "", names(iNat_new))
@@ -48,85 +52,116 @@ names(iNat_new) <- gsub("latidude", "latitude", names(iNat_new))
 transform_iNat_data <- function(iNat_df) {
   
   # Initialize an empty dataframe with the structure of Raw_original
-  transformed <- data.frame(matrix(ncol = ncol(Raw_original), nrow = nrow(iNat_df)))
+  # but ensure all columns have the correct data types
+  transformed <- data.frame(
+    matrix(ncol = ncol(Raw_original), nrow = nrow(iNat_df))
+  )
   colnames(transformed) <- colnames(Raw_original)
   
-  # Fill in the transformed dataframe
-  transformed$Specimen_Number <- max(Raw_original$Specimen_Number, na.rm = TRUE) + 
-    seq_len(nrow(iNat_df))
+  # First, convert all columns to character to avoid type mismatches
+  transformed[] <- lapply(transformed, as.character)
+  
+  # Now fill in the transformed dataframe
+  # Convert numeric IDs to sequential numbers
+  transformed$Specimen_Number <- as.character(
+    max(as.numeric(Raw_original$Specimen_Number), na.rm = TRUE) + 
+      seq_len(nrow(iNat_df))
+  )
+  
   transformed$Collection <- "iNat"
   transformed$Lot_Number <- paste0("iNat_", iNat_df$id)
   transformed$Collector <- iNat_df$login
-  transformed$Latitude <- iNat_df$latitude
-  transformed$Longitude <- iNat_df$longitude
   
-  # Convert length and width from the iNat data (appear to be in different units)
-  # Based on your original script, iNat data had different measurement units
-  # You'll need to calibrate these conversions based on your actual data
-  transformed$Length_mm <- iNat_df$length / 10  # Example conversion - ADJUST AS NEEDED
-  transformed$Width_mm <- iNat_df$width / 10    # Example conversion - ADJUST AS NEEDED
+  # Ensure Latitude and Longitude are numeric
+  transformed$Latitude <- as.character(as.numeric(iNat_df$latitude))
+  transformed$Longitude <- as.character(as.numeric(iNat_df$longitude))
   
-  # Calculate derived metrics (following original script logic)
-  transformed$Geometric_Mean <- sqrt(transformed$Length_mm * transformed$Width_mm)
-  transformed$Globosity_WoverL <- transformed$Width_mm / transformed$Length_mm
+  # Convert length and width (adjust conversion factor as needed)
+  # First check if the columns exist and have data
+  if("length" %in% names(iNat_df) && "width" %in% names(iNat_df)) {
+    # Convert to numeric, handling empty strings
+    length_vals <- as.numeric(iNat_df$length)
+    width_vals <- as.numeric(iNat_df$width)
+    
+    # Apply conversion (adjust /10 as needed based on your data)
+    transformed$Length_mm <- as.character(ifelse(
+      is.na(length_vals), 
+      NA, 
+      length_vals / 10  # Example conversion - ADJUST AS NEEDED
+    ))
+    
+    transformed$Width_mm <- as.character(ifelse(
+      is.na(width_vals), 
+      NA, 
+      width_vals / 10    # Example conversion - ADJUST AS NEEDED
+    ))
+    
+    # Calculate derived metrics where we have both measurements
+    has_both <- !is.na(length_vals) & !is.na(width_vals)
+    if(any(has_both)) {
+      length_num <- as.numeric(transformed$Length_mm)
+      width_num <- as.numeric(transformed$Width_mm)
+      
+      transformed$Geometric_Mean <- as.character(
+        sqrt(length_num * width_num)
+      )
+      
+      transformed$Globosity_WoverL <- as.character(
+        width_num / length_num
+      )
+    }
+  }
   
   # Set epoch to Anthropocene for iNaturalist observations
   transformed$Epoch <- "Anthropocene"
   
   # Parse observation date
-  obs_date <- as.Date(iNat_df$date, format = "%m/%d/%y")
-  transformed$Year <- as.numeric(format(obs_date, "%Y"))
-  transformed$Decade <- floor(transformed$Year / 10) * 10
-  transformed$Month <- as.numeric(format(obs_date, "%m"))
+  # Handle different date formats
+  obs_date <- tryCatch({
+    as.Date(iNat_df$date, format = "%m/%d/%y")
+  }, error = function(e) {
+    # Try alternative format
+    as.Date(iNat_df$date, format = "%Y-%m-%d")
+  })
   
-  # Assign season based on month (following original script convention)
+  transformed$Year <- as.character(as.numeric(format(obs_date, "%Y")))
+  transformed$Decade <- as.character(floor(as.numeric(transformed$Year) / 10) * 10)
+  transformed$Month <- as.character(as.numeric(format(obs_date, "%m")))
+  
+  # Assign season based on month
+  month_num <- as.numeric(transformed$Month)
   transformed$Season <- case_when(
-    transformed$Month %in% c(12, 1, 2) ~ "Winter",
-    transformed$Month %in% c(3, 4, 5) ~ "Spring",
-    transformed$Month %in% c(6, 7, 8) ~ "Summer",
-    transformed$Month %in% c(9, 10, 11) ~ "Fall",
+    month_num %in% c(12, 1, 2) ~ "Winter",
+    month_num %in% c(3, 4, 5) ~ "Spring",
+    month_num %in% c(6, 7, 8) ~ "Summer",
+    month_num %in% c(9, 10, 11) ~ "Fall",
     TRUE ~ NA_character_
   )
   
-  # Determine county based on latitude (simplified - you may need more precise geocoding)
+  # Determine county based on latitude
+  lat_num <- as.numeric(transformed$Latitude)
   transformed$County <- case_when(
-    transformed$Latitude >= 38.0 ~ "Sonoma",
-    transformed$Latitude >= 37.5 ~ "San Mateo",
-    transformed$Latitude >= 36.0 ~ "Monterey",
-    transformed$Latitude >= 35.5 ~ "San Luis Obispo",
-    transformed$Latitude >= 34.5 ~ "Santa Barbara",
-    transformed$Latitude >= 34.0 ~ "Ventura",
-    transformed$Latitude >= 33.5 ~ "Los Angeles",
-    transformed$Latitude >= 33.0 ~ "Orange",
-    transformed$Latitude >= 32.5 ~ "San Diego",
+    lat_num >= 38.0 ~ "Sonoma",
+    lat_num >= 37.5 ~ "San Mateo",
+    lat_num >= 36.0 ~ "Monterey",
+    lat_num >= 35.5 ~ "San Luis Obispo",
+    lat_num >= 34.5 ~ "Santa Barbara",
+    lat_num >= 34.0 ~ "Ventura",
+    lat_num >= 33.5 ~ "Los Angeles",
+    lat_num >= 33.0 ~ "Orange",
+    lat_num >= 32.5 ~ "San Diego",
     TRUE ~ "Baja California"
   )
   
   # Determine ecoregion based on location
   transformed$Ecoregion <- ifelse(
-    transformed$Latitude > 34.5, 
+    lat_num > 34.5, 
     "Northern California", 
     "Southern California Bight"
   )
   
-  # Set coastal proximity (you may need actual coastal distance calculations)
-  transformed$Coastal_Proximity <- "Coastal"  # Default assumption for iNat observations
-  
-  # Set other fields to NA that will need to be populated from other sources
-  na_columns <- c("Site", "SoCal_Group", "Island_Size", "Formation", 
-                  "Mean_SST", "Mean_SST_Sdev", "Aperture_mm", "Thickness_mm",
-                  "Habitat", "Depth", "BRY", "BAR", "LMP", "TWS", "COR", 
-                  "ALG", "SCR", "BOR_TAP", "BOR_STR", "BOR_INC",
-                  "mean_pvolc3", "sd_pvolc3", "zooplankton_n_points_used",
-                  "zooplankton_mean_distance", "fish_total_catch_wt_kg",
-                  "fish_cpue_kg_per_ha_der", "sd_total_catch_wt_kg",
-                  "sd_cpue_kg_per_ha_der", "fish_n_points_used",
-                  "fish_mean_distance", "Population_Density",
-                  "Population_Density_NoBaja", "MPA", "Image_url")
-  
-  for(col in na_columns) {
-    transformed[[col]] <- NA
-  }
+  # Set coastal proximity
+  transformed$Coastal_Proximity <- "Coastal"
   
   # Create Location code based on County
   transformed$Location <- case_when(
@@ -138,6 +173,20 @@ transform_iNat_data <- function(iNat_df) {
     TRUE ~ substr(gsub(" ", "", transformed$County), 1, 3)
   )
   
+  # Set all other columns to NA
+  other_cols <- setdiff(
+    colnames(transformed),
+    c("Specimen_Number", "Collection", "Lot_Number", "Collector", 
+      "Latitude", "Longitude", "Length_mm", "Width_mm", 
+      "Geometric_Mean", "Globosity_WoverL", "Epoch", "Year", 
+      "Decade", "Month", "Season", "County", "Ecoregion", 
+      "Coastal_Proximity", "Location")
+  )
+  
+  for(col in other_cols) {
+    transformed[[col]] <- NA_character_
+  }
+  
   return(transformed)
 }
 
@@ -145,11 +194,34 @@ transform_iNat_data <- function(iNat_df) {
 iNat_transformed <- transform_iNat_data(iNat_new)
 
 # ---------------------------
-# 3. MERGE DATASETS
+# 3. MERGE DATASETS WITH TYPE HANDLING
 # ---------------------------
 
-# Combine original and new iNaturalist data
-Raw_combined <- bind_rows(Raw_original, iNat_transformed)
+# First, ensure all columns in Raw_original are character type for safe binding
+Raw_original_chr <- Raw_original
+Raw_original_chr[] <- lapply(Raw_original_chr, as.character)
+
+# Now bind the rows
+Raw_combined <- bind_rows(Raw_original_chr, iNat_transformed)
+
+# Convert back to appropriate data types
+Raw_combined <- Raw_combined %>%
+  mutate(
+    Specimen_Number = as.numeric(Specimen_Number),
+    Latitude = as.numeric(Latitude),
+    Longitude = as.numeric(Longitude),
+    Length_mm = as.numeric(Length_mm),
+    Width_mm = as.numeric(Width_mm),
+    Geometric_Mean = as.numeric(Geometric_Mean),
+    Globosity_WoverL = as.numeric(Globosity_WoverL),
+    Year = as.numeric(Year),
+    Decade = as.numeric(Decade),
+    Month = as.numeric(Month),
+    Mean_SST = as.numeric(Mean_SST),
+    Mean_SST_Sdev = as.numeric(Mean_SST_Sdev),
+    Aperture_mm = as.numeric(Aperture_mm),
+    Thickness_mm = as.numeric(Thickness_mm)
+  )
 
 # Reset Specimen_Number to be sequential
 Raw_combined$Specimen_Number <- seq_len(nrow(Raw_combined))
@@ -161,12 +233,20 @@ Raw_combined$Specimen_Number <- seq_len(nrow(Raw_combined))
 # Replicate the cleaning steps from your original script
 Clean <- Raw_combined %>%
   # Filter outliers (replicating original logic)
+  # Note: using ifelse to handle NAs in Thickness_mm and Aperture_mm
   filter(ifelse(is.na(Thickness_mm), TRUE, Thickness_mm < 2)) %>%
-  filter(!(Width_mm < 15 & Thickness_mm > 2)) %>%
+  filter(!(Width_mm < 15 & !is.na(Thickness_mm) & Thickness_mm > 2)) %>%
   filter(ifelse(is.na(Aperture_mm), TRUE, Aperture_mm < 6)) %>%
-  filter(!(Length_mm > 20 & Aperture_mm < 2)) %>%
+  filter(!(Length_mm > 20 & !is.na(Aperture_mm) & Aperture_mm < 2)) %>%
   filter(Width_mm > 2) %>%
-  filter(Globosity_WoverL > 0.42 & Globosity_WoverL < 0.71) %>%
+  # Handle NAs in Globosity_WoverL
+  filter(
+    ifelse(
+      is.na(Globosity_WoverL), 
+      TRUE, 
+      Globosity_WoverL > 0.42 & Globosity_WoverL < 0.71
+    )
+  ) %>%
   # Remove Pliocene specimens
   filter(!Epoch == "Pliocene") %>%
   # Filter latitude range
@@ -222,17 +302,1056 @@ iNat_by_county <- Clean %>%
 print(iNat_by_county)
 
 # ---------------------------
-# 8. UPDATE YOUR R MARKDOWN SCRIPT
+# 8. QUICK DATA QUALITY CHECKS
 # ---------------------------
 
-cat("\nTo use the integrated data in your RMarkdown script, replace:\n")
-cat("Raw <- read.csv(text=getURL(\"https://raw.githubusercontent.com/.../SupplementalTable2_Data-Raw.csv\"))\n")
-cat("With:\n")
-cat("Raw <- read.csv(\"SupplementalTable2_Data-Raw-Integrated.csv\")\n")
-cat("\nOr update the GitHub URL if you upload the integrated file.\n")
+cat("\n=== Data Quality Checks ===\n")
+
+# Check for NAs in key columns
+cat("\nMissing values in key columns:\n")
+key_cols <- c("Length_mm", "Width_mm", "Latitude", "Longitude", "Epoch")
+missing_counts <- sapply(key_cols, function(col) {
+  sum(is.na(Clean[[col]]))
+})
+print(missing_counts)
+
+# Check measurement ranges
+cat("\nMeasurement ranges:\n")
+if(!all(is.na(Clean$Length_mm))) {
+  cat("Length (mm):", range(Clean$Length_mm, na.rm = TRUE), "\n")
+}
+if(!all(is.na(Clean$Width_mm))) {
+  cat("Width (mm):", range(Clean$Width_mm, na.rm = TRUE), "\n")
+}
+if(!all(is.na(Clean$Globosity_WoverL))) {
+  cat("Globosity (W/L):", range(Clean$Globosity_WoverL, na.rm = TRUE), "\n")
+}
+
+cat("\nTo use the integrated data in your RMarkdown script, you can either:\n")
+cat("1. Use the local files created by this script, or\n")
+cat("2. Upload them to GitHub and update the URLs in your script.\n")
 ```
 
+Statistical analysis of data distribution
+```{r}
+# Analysis of Clean Dataset: Museum/Field vs iNaturalist Data
 
+# install.packages("broom")
+# install.packages("effectsize")
+# install.packages("pwr")
+# install.packages("lubridate")
+# install.packages("gridExtra")
+
+library(tidyverse)
+library(broom)
+library(effectsize)
+library(pwr)
+library(lubridate)
+library(gridExtra)
+
+# Load the Clean dataset
+Clean <- read.csv("https://raw.githubusercontent.com/sabahzero/C_californicus_Morphology/main/SupplementalTable3_Data-Clean.csv", stringsAsFactors = FALSE)
+
+# ------------------------------------------------------------
+# 1. DATA PREPARATION AND OVERVIEW
+# ------------------------------------------------------------
+
+cat("=== DATA OVERVIEW ===\n")
+cat("Total specimens in Clean dataset:", nrow(Clean), "\n")
+cat("Unique collections:", paste(unique(Clean$Collection), collapse=", "), "\n\n")
+
+# Create data groups
+Clean <- Clean %>%
+  mutate(
+    Data_Type = ifelse(Collection == "iNat", "iNaturalist", "Museum/Field"),
+    # Ensure numeric types
+    Length_mm = as.numeric(Length_mm),
+    Width_mm = as.numeric(Width_mm),
+    Geometric_Mean = as.numeric(Geometric_Mean),
+    Globosity_WoverL = as.numeric(Globosity_WoverL),
+    Year = as.numeric(Year),
+    Decade = as.numeric(Decade)
+  )
+
+# Summary by data type
+data_type_summary <- Clean %>%
+  group_by(Data_Type) %>%
+  summarise(
+    N = n(),
+    Percent = round(n()/nrow(Clean)*100, 1),
+    Mean_Length = mean(Length_mm, na.rm = TRUE),
+    SD_Length = sd(Length_mm, na.rm = TRUE),
+    Mean_Width = mean(Width_mm, na.rm = TRUE),
+    SD_Width = sd(Width_mm, na.rm = TRUE),
+    Mean_Globosity = mean(Globosity_WoverL, na.rm = TRUE),
+    SD_Globosity = sd(Globosity_WoverL, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+cat("Data Type Summary:\n")
+print(data_type_summary)
+
+# ------------------------------------------------------------
+# 2. CHRONOLOGICAL ANALYSIS
+# ------------------------------------------------------------
+
+cat("\n=== CHRONOLOGICAL ANALYSIS ===\n")
+
+# Check year ranges
+year_summary <- Clean %>%
+  filter(!is.na(Year)) %>%
+  group_by(Data_Type) %>%
+  summarise(
+    Min_Year = min(Year, na.rm = TRUE),
+    Max_Year = max(Year, na.rm = TRUE),
+    Year_Range = max(Year, na.rm = TRUE) - min(Year, na.rm = TRUE),
+    Median_Year = median(Year, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+cat("\nYear ranges by data type:\n")
+print(year_summary)
+
+# Visualize temporal distribution
+p1 <- Clean %>%
+  filter(!is.na(Year)) %>%
+  ggplot(aes(x = Year, fill = Data_Type)) +
+  geom_histogram(binwidth = 5, alpha = 0.7, position = "identity") +
+  labs(title = "Temporal Distribution of Specimens",
+       x = "Year", y = "Count") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+p2 <- Clean %>%
+  filter(!is.na(Year) & Year >= 2000) %>%
+  ggplot(aes(x = Year, fill = Data_Type)) +
+  geom_histogram(binwidth = 1, alpha = 0.7, position = "identity") +
+  labs(title = "Temporal Distribution (2000+)",
+       x = "Year", y = "Count") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# ------------------------------------------------------------
+# 3. BATCH EFFECTS ANALYSIS
+# ------------------------------------------------------------
+
+cat("\n=== BATCH EFFECTS ANALYSIS ===\n")
+
+# Function to perform comprehensive comparison
+compare_groups <- function(data, var_name) {
+  formula <- as.formula(paste(var_name, "~ Data_Type"))
+  
+  # Descriptive statistics
+  desc_stats <- data %>%
+    group_by(Data_Type) %>%
+    summarise(
+      Mean = mean(.data[[var_name]], na.rm = TRUE),
+      SD = sd(.data[[var_name]], na.rm = TRUE),
+      Median = median(.data[[var_name]], na.rm = TRUE),
+      IQR = IQR(.data[[var_name]], na.rm = TRUE),
+      N = sum(!is.na(.data[[var_name]])),
+      .groups = 'drop'
+    )
+  
+  # Statistical tests
+  # 1. T-test (if parametric)
+  t_test <- tryCatch({
+    t.test(as.formula(paste(var_name, "~ Data_Type")), data = data)
+  }, error = function(e) NULL)
+  
+  # 2. Wilcoxon test (non-parametric)
+  wilcox_test <- tryCatch({
+    wilcox.test(as.formula(paste(var_name, "~ Data_Type")), data = data)
+  }, error = function(e) NULL)
+  
+  # 3. Cohen's d effect size
+  cohen_d <- tryCatch({
+    cohens_d(as.formula(paste(var_name, "~ Data_Type")), data = data)
+  }, error = function(e) NULL)
+  
+  # 4. ANOVA with other factors
+  anova_test <- tryCatch({
+    aov(formula, data = data) %>% summary()
+  }, error = function(e) NULL)
+  
+  return(list(
+    variable = var_name,
+    descriptive = desc_stats,
+    t_test = t_test,
+    wilcox_test = wilcox_test,
+    cohen_d = cohen_d,
+    anova = anova_test
+  ))
+}
+
+# Analyze key morphological variables
+morph_vars <- c("Length_mm", "Width_mm", "Geometric_Mean", "Globosity_WoverL")
+
+batch_effects <- list()
+for (var in morph_vars) {
+  cat(sprintf("\n--- Analysis for %s ---\n", var))
+  result <- compare_groups(Clean, var)
+  batch_effects[[var]] <- result
+  
+  # Print descriptive stats
+  print(result$descriptive)
+  
+  # Print statistical test results
+  if (!is.null(result$t_test)) {
+    cat(sprintf("\nT-test: t = %.3f, p = %.4f\n", 
+                result$t_test$statistic, result$t_test$p.value))
+  }
+  
+  if (!is.null(result$wilcox_test)) {
+    cat(sprintf("Wilcoxon test: W = %.0f, p = %.4f\n", 
+                result$wilcox_test$statistic, result$wilcox_test$p.value))
+  }
+  
+  if (!is.null(result$cohen_d)) {
+    cat(sprintf("Cohen's d: %.3f (Effect size: %s)\n", 
+                result$cohen_d$Cohens_d, 
+                interpret_cohens_d(result$cohen_d$Cohens_d)))
+  }
+}
+
+# ------------------------------------------------------------
+# 4. NORMALITY ASSESSMENT
+# ------------------------------------------------------------
+
+cat("\n=== NORMALITY ASSESSMENT ===\n")
+
+# Function to assess normality
+assess_normality <- function(data, var_name) {
+  results <- list()
+  
+  for (type in c("Museum/Field", "iNaturalist")) {
+    subset_data <- data %>% 
+      filter(Data_Type == type & !is.na(.data[[var_name]]))
+    
+    if (nrow(subset_data) > 3) {
+      # Shapiro-Wilk test
+      shapiro <- shapiro.test(subset_data[[var_name]])
+      
+      # QQ plot
+      qq_data <- data.frame(
+        Theoretical = qqnorm(subset_data[[var_name]], plot.it = FALSE)$x,
+        Sample = qqnorm(subset_data[[var_name]], plot.it = FALSE)$y
+      )
+      
+      results[[type]] <- list(
+        n = nrow(subset_data),
+        shapiro_W = shapiro$statistic,
+        shapiro_p = shapiro$p.value,
+        qq_data = qq_data,
+        is_normal = shapiro$p.value > 0.05
+      )
+    }
+  }
+  return(results)
+}
+
+# Create normality assessment plots
+normality_plots <- list()
+for (var in morph_vars) {
+  normality_results <- assess_normality(Clean, var)
+  
+  # Create density plots
+  p_density <- Clean %>%
+    filter(!is.na(.data[[var]])) %>%
+    ggplot(aes(x = .data[[var]], fill = Data_Type)) +
+    geom_density(alpha = 0.5) +
+    labs(title = paste("Distribution of", var),
+         x = var, y = "Density") +
+    theme_minimal() +
+    facet_wrap(~ Data_Type, ncol = 2)
+  
+  # Create QQ plots
+  if ("iNaturalist" %in% names(normality_results)) {
+    p_qq_iNat <- ggplot(normality_results[["iNaturalist"]]$qq_data, 
+                       aes(x = Theoretical, y = Sample)) +
+      geom_point(alpha = 0.5) +
+      geom_qq_line(aes(sample = Sample), color = "red") +
+      labs(title = paste("QQ Plot - iNaturalist:", var),
+           x = "Theoretical Quantiles", y = "Sample Quantiles") +
+      theme_minimal()
+  }
+  
+  if ("Museum/Field" %in% names(normality_results)) {
+    p_qq_museum <- ggplot(normality_results[["Museum/Field"]]$qq_data, 
+                         aes(x = Theoretical, y = Sample)) +
+      geom_point(alpha = 0.5) +
+      geom_qq_line(aes(sample = Sample), color = "red") +
+      labs(title = paste("QQ Plot - Museum/Field:", var),
+           x = "Theoretical Quantiles", y = "Sample Quantiles") +
+      theme_minimal()
+  }
+  
+  normality_plots[[var]] <- list(
+    density = p_density,
+    qq_iNat = if(exists("p_qq_iNat")) p_qq_iNat else NULL,
+    qq_museum = if(exists("p_qq_museum")) p_qq_museum else NULL,
+    results = normality_results
+  )
+  
+  # Print normality test results
+  cat(sprintf("\n--- Normality tests for %s ---\n", var))
+  for (type in names(normality_results)) {
+    cat(sprintf("%s: Shapiro-Wilk W = %.4f, p = %.4f (Normal: %s)\n",
+                type, 
+                normality_results[[type]]$shapiro_W,
+                normality_results[[type]]$shapiro_p,
+                ifelse(normality_results[[type]]$is_normal, "Yes", "No")))
+  }
+}
+
+# ------------------------------------------------------------
+# 5. DATA TRANSFORMATION OPTIONS
+# ------------------------------------------------------------
+
+cat("\n=== DATA TRANSFORMATION OPTIONS ===\n")
+
+transform_data <- function(x) {
+  transformations <- list(
+    original = x,
+    log = log(x + 1),
+    sqrt = sqrt(x),
+    cube_root = sign(x) * abs(x)^(1/3),
+    rank = rank(x),
+    arcsin_sqrt = asin(sqrt(x))  # For proportions like Globosity
+  )
+  return(transformations)
+}
+
+# Test transformations for non-normal variables
+test_transformations <- function(data, var_name, data_type) {
+  subset_data <- data %>% 
+    filter(Data_Type == data_type & !is.na(.data[[var_name]])) %>%
+    pull(var_name)
+  
+  if (length(subset_data) > 3) {
+    transformations <- transform_data(subset_data)
+    
+    cat(sprintf("\nTransformations for %s (%s):\n", var_name, data_type))
+    
+    for (trans_name in names(transformations)) {
+      if (all(is.finite(transformations[[trans_name]]))) {
+        shapiro <- shapiro.test(transformations[[trans_name]])
+        cat(sprintf("  %s: W = %.4f, p = %.4f\n", 
+                    trans_name, shapiro$statistic, shapiro$p.value))
+      }
+    }
+  }
+}
+
+# Test transformations for each variable showing non-normality
+for (var in morph_vars) {
+  for (type in c("Museum/Field", "iNaturalist")) {
+    test_transformations(Clean, var, type)
+  }
+}
+
+# ------------------------------------------------------------
+# 6. POWER ANALYSIS
+# ------------------------------------------------------------
+
+cat("\n=== POWER ANALYSIS ===\n")
+
+# Function to calculate power for different effect sizes
+calculate_power <- function(n1, n2, alpha = 0.05) {
+  effect_sizes <- c(0.2, 0.5, 0.8)  # Small, medium, large
+  
+  power_results <- data.frame(
+    Effect_Size = effect_sizes,
+    Power = sapply(effect_sizes, function(d) {
+      pwr.t2n.test(n1 = n1, n2 = n2, d = d, sig.level = alpha)$power
+    })
+  )
+  
+  # Calculate detectable effect size with 80% power
+  detectable_effect <- pwr.t2n.test(
+    n1 = n1, n2 = n2, power = 0.80, sig.level = alpha
+  )$d
+  
+  return(list(
+    power_table = power_results,
+    detectable_effect = detectable_effect
+  ))
+}
+
+# Get sample sizes
+n_iNat <- sum(Clean$Data_Type == "iNaturalist", na.rm = TRUE)
+n_museum <- sum(Clean$Data_Type == "Museum/Field", na.rm = TRUE)
+
+cat(sprintf("\nSample sizes:\n"))
+cat(sprintf("iNaturalist: %d specimens\n", n_iNat))
+cat(sprintf("Museum/Field: %d specimens\n", n_museum))
+
+# Calculate power
+power_analysis <- calculate_power(n_iNat, n_museum)
+
+cat("\nStatistical power for detecting effects:\n")
+print(power_analysis$power_table)
+
+cat(sprintf("\nMinimum detectable effect size with 80%% power: %.3f\n", 
+            power_analysis$detectable_effect))
+cat("Interpretation: ", interpret_cohens_d(power_analysis$detectable_effect), "\n")
+
+# Power for ANOVA (if considering multiple groups within Museum/Field)
+if (n_museum > 0) {
+  # Assuming 8 museum collections as groups
+  anova_power <- pwr.anova.test(
+    k = 9,  # 8 museum collections + iNaturalist
+    n = min(n_iNat/9, n_museum/8),  # Balanced design approximation
+    f = 0.25,  # Medium effect size
+    sig.level = 0.05
+  )
+  
+  cat(sprintf("\nANOVA power analysis:\n"))
+  cat(sprintf("Groups: 9 (8 museum collections + iNaturalist)\n"))
+  cat(sprintf("Approximate sample per group: %.0f\n", min(n_iNat/9, n_museum/8)))
+  cat(sprintf("Power to detect medium effect (f=0.25): %.3f\n", anova_power$power))
+}
+
+# ------------------------------------------------------------
+# 7. SPATIAL AND TEMPORAL OVERLAP ANALYSIS
+# ------------------------------------------------------------
+
+cat("\n=== SPATIAL AND TEMPORAL OVERLAP ===\n")
+
+# Temporal overlap calculation
+temporal_overlap <- Clean %>%
+  filter(!is.na(Year)) %>%
+  group_by(Data_Type) %>%
+  summarise(
+    Year_Range = paste(min(Year), "-", max(Year)),
+    Overlap_Start = max(min(Year[Data_Type == "iNaturalist"]), 
+                       min(Year[Data_Type == "Museum/Field"])),
+    Overlap_End = min(max(Year[Data_Type == "iNaturalist"]), 
+                     max(Year[Data_Type == "Museum/Field"])),
+    Overlap_Years = ifelse(Overlap_End >= Overlap_Start, 
+                          Overlap_End - Overlap_Start + 1, 0),
+    .groups = 'drop'
+  ) %>%
+  distinct()
+
+cat("\nTemporal overlap analysis:\n")
+print(temporal_overlap)
+
+# Spatial overlap (by county)
+spatial_overlap <- Clean %>%
+  filter(!is.na(County) & !is.na(Data_Type)) %>%
+  group_by(County, Data_Type) %>%
+  summarise(N = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Data_Type, values_from = N, values_fill = 0) %>%
+  mutate(
+    Total = `Museum/Field` + iNaturalist,
+    Overlap_Score = pmin(`Museum/Field`, iNaturalist) / pmax(`Museum/Field`, iNaturalist),
+    Overlap_Score = ifelse(is.na(Overlap_Score), 0, Overlap_Score)
+  ) %>%
+  arrange(desc(Total))
+
+cat("\nSpatial overlap by county:\n")
+print(spatial_overlap)
+
+# ------------------------------------------------------------
+# 8. COMPREHENSIVE VISUALIZATION
+# ------------------------------------------------------------
+
+cat("\n=== GENERATING COMPREHENSIVE VISUALIZATIONS ===\n")
+
+# Create a multi-panel figure
+final_plot <- function() {
+  # Panel 1: Data composition
+  p1 <- ggplot(data_type_summary, aes(x = Data_Type, y = N, fill = Data_Type)) +
+    geom_bar(stat = "identity") +
+    geom_text(aes(label = paste0(N, " (", Percent, "%)")), 
+              vjust = -0.5, size = 3) +
+    labs(title = "Sample Sizes by Data Type", 
+         x = "Data Type", y = "Number of Specimens") +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  # Panel 2: Morphological comparison
+  comparison_data <- Clean %>%
+    select(Data_Type, Length_mm, Width_mm, Globosity_WoverL) %>%
+    pivot_longer(cols = c(Length_mm, Width_mm, Globosity_WoverL),
+                 names_to = "Variable", values_to = "Value") %>%
+    filter(!is.na(Value))
+  
+  p2 <- ggplot(comparison_data, aes(x = Data_Type, y = Value, fill = Data_Type)) +
+    geom_boxplot(alpha = 0.7) +
+    facet_wrap(~ Variable, scales = "free_y", ncol = 3) +
+    labs(title = "Morphological Comparison by Data Type",
+         x = "Data Type", y = "Value") +
+    theme_minimal() +
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  # Panel 3: Temporal distribution
+  p3 <- Clean %>%
+    filter(!is.na(Year)) %>%
+    ggplot(aes(x = Year, fill = Data_Type)) +
+    geom_density(alpha = 0.5) +
+    labs(title = "Temporal Distribution Density",
+         x = "Year", y = "Density") +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+  
+  # Arrange plots
+  grid.arrange(p1, p2, p3, ncol = 1, heights = c(1, 2, 1))
+}
+
+# Save the comprehensive plot
+png("Data_Type_Analysis.png", width = 10, height = 12, units = "in", res = 300)
+final_plot()
+dev.off()
+
+cat("\n=== ANALYSIS COMPLETE ===\n")
+cat("\nKey findings have been saved to:\n")
+cat("1. Console output (statistical results)\n")
+cat("2. Data_Type_Analysis.png (comprehensive visualization)\n")
+cat("3. Individual density and QQ plots for normality assessment\n")
+
+# ------------------------------------------------------------
+# 9. SUMMARY RECOMMENDATIONS
+# ------------------------------------------------------------
+
+cat("\n=== SUMMARY AND RECOMMENDATIONS ===\n\n")
+
+# Based on analysis, provide recommendations
+recommendations <- list(
+  "Batch Effects" = if(any(sapply(batch_effects, function(x) 
+    !is.null(x$t_test) && x$t_test$p.value < 0.05))) {
+    "Significant batch effects detected. Consider including Data_Type as a covariate in analyses."
+  } else {
+    "No significant batch effects detected between data types."
+  },
+  
+  "Normality" = if(any(sapply(normality_plots, function(x) 
+    any(sapply(x$results, function(y) !y$is_normal))))){
+    "Some variables show non-normal distributions. Consider data transformations or non-parametric tests."
+  } else {
+    "Data appears normally distributed for most variables."
+  },
+  
+  "Statistical Power" = if(power_analysis$detectable_effect < 0.5) {
+    sprintf("Good statistical power (detectable effect size: %.2f).", 
+            power_analysis$detectable_effect)
+  } else {
+    sprintf("Limited power for small effects (detectable effect size: %.2f).", 
+            power_analysis$detectable_effect)
+  },
+  
+  "Temporal Comparability" = if(temporal_overlap$Overlap_Years[1] > 10) {
+    sprintf("Good temporal overlap (%d years). iNaturalist data is comparable to museum data.", 
+            temporal_overlap$Overlap_Years[1])
+  } else {
+    "Limited temporal overlap. Consider temporal stratification in analyses."
+  }
+)
+
+for (i in seq_along(recommendations)) {
+  cat(names(recommendations)[i], ": ", recommendations[[i]], "\n\n")
+}
+```
+
+Updates to plots
+```{r}
+# OPTIMIZED ANALYSIS SCRIPT FOR C. californicus MORPHOLOGY
+# Using Clean dataset only with DRY principles
+
+# ==============================================================================
+# 0. SETUP AND DATA LOADING
+# ==============================================================================
+
+# Install and load required packages (run once)
+required_packages <- c("tidyverse", "PerformanceAnalytics", "GGally", 
+                       "cowplot", "ggsignif", "ggpubr", "broom", "effectsize")
+new_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages)
+
+# Load all packages
+library(tidyverse)
+library(PerformanceAnalytics)
+library(GGally)
+library(cowplot)
+library(ggsignif)
+library(ggpubr)
+library(broom)
+library(effectsize)
+
+# Load Clean dataset directly
+Clean <- read.csv("https://raw.githubusercontent.com/sabahzero/C_californicus_Morphology/main/SupplementalTable3_Data-Clean.csv", 
+                  stringsAsFactors = FALSE)
+
+# Ensure numeric types for key variables
+Clean <- Clean %>%
+  mutate(
+    Length_mm = as.numeric(Length_mm),
+    Width_mm = as.numeric(Width_mm),
+    Geometric_Mean = as.numeric(Geometric_Mean),
+    Globosity_WoverL = as.numeric(Globosity_WoverL),
+    Mean_SST = as.numeric(Mean_SST),
+    Latitude = as.numeric(Latitude),
+    Year = as.numeric(Year),
+    Decade = as.numeric(Decade),
+    Epoch = factor(Epoch, levels = c("Pleistocene", "Holocene", "Anthropocene")),
+    Data_Type = ifelse(Collection == "iNat", "iNaturalist", "Museum/Field")
+  )
+
+# ==============================================================================
+# 1. REUSABLE FUNCTIONS
+# ==============================================================================
+
+# Function for consistent plotting aesthetics
+epoch_colors <- c("Pleistocene" = "#00AFBB", 
+                  "Holocene" = "#E7B800", 
+                  "Anthropocene" = "#FC4E07")
+
+theme_custom <- function(base_size = 11) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      plot.title = element_text(size = base_size + 3, face = "bold"),
+      axis.title = element_text(face = "bold"),
+      legend.position = "bottom",
+      panel.grid.minor = element_blank()
+    )
+}
+
+# Function for regression plots with consistent formatting
+ggplotRegression <- function(fit, xlab = NULL, ylab = NULL) {
+  require(ggplot2)
+  
+  coef_summary <- summary(fit)$coefficients
+  slope <- ifelse(nrow(coef_summary) > 1, coef_summary[2, 1], NA)
+  p_value <- ifelse(nrow(coef_summary) > 1, coef_summary[2, 4], NA)
+  
+  ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+    geom_point(alpha = 0.4, size = 1.5) +
+    stat_smooth(method = "lm", col = "red", se = FALSE) +
+    labs(
+      title = sprintf("R² = %.3f, Slope = %.3f, p = %.2e", 
+                      summary(fit)$adj.r.squared, slope, p_value),
+      x = ifelse(is.null(xlab), names(fit$model)[2], xlab),
+      y = ifelse(is.null(ylab), names(fit$model)[1], ylab)
+    ) +
+    theme_custom()
+}
+
+# Function for correlation matrix plots
+plot_correlation_matrix <- function(data, variables, filename = NULL) {
+  corr_matrix <- chart.Correlation(data %>% select(all_of(variables)))
+  
+  if (!is.null(filename)) {
+    dev.copy(png, filename, width = 10, height = 10, units = "in", res = 300)
+    dev.off()
+  }
+  
+  return(corr_matrix)
+}
+
+# Function for epoch-specific boxplots
+create_epoch_boxplot <- function(data, x_var, y_var, fill_var = NULL, 
+                                 y_limits = NULL, title = "", 
+                                 filename = NULL) {
+  
+  plot <- ggplot(data, aes_string(x = x_var, y = y_var)) +
+    geom_boxplot(aes_string(fill = ifelse(is.null(fill_var), "Epoch", fill_var)), 
+                 alpha = 0.7) +
+    scale_fill_manual(values = if(is.null(fill_var)) epoch_colors else "Set2") +
+    labs(title = title, x = x_var, y = y_var) +
+    theme_custom() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  if (!is.null(y_limits)) {
+    plot <- plot + coord_cartesian(ylim = y_limits)
+  }
+  
+  if (!is.null(filename)) {
+    ggsave(filename, plot, width = 8, height = 6, dpi = 300)
+  }
+  
+  return(plot)
+}
+
+# ==============================================================================
+# 2. DATA OVERVIEW AND CORRELATION ANALYSIS (Figure 2b)
+# ==============================================================================
+
+cat("=== DATA OVERVIEW ===\n")
+cat("Total specimens:", nrow(Clean), "\n")
+cat("Collections:", paste(sort(unique(Clean$Collection)), collapse = ", "), "\n")
+cat("Epoch distribution:\n")
+print(table(Clean$Epoch))
+
+# Define morphological variables
+morph_vars <- c("Length_mm", "Width_mm", "Geometric_Mean", "Globosity_WoverL")
+
+# Figure 2b: Correlation matrix
+Fig2b_data <- Clean %>%
+  select(Epoch, all_of(morph_vars)) %>%
+  rename(
+    "Length (size)" = Length_mm,
+    "Width (size)" = Width_mm,
+    "geomM (mass)" = Geometric_Mean,
+    "Globosity (shape)" = Globosity_WoverL
+  )
+
+# Custom function for scatter plots with regression
+my_fn <- function(data, mapping, ...) {
+  p <- ggplot(data = data, mapping = mapping) + 
+    geom_point(alpha = 0.6, size = 1) + 
+    geom_smooth(method = lm, color = "black", se = FALSE, ...)
+  p
+}
+
+Fig2b_chart <- ggpairs(
+  Fig2b_data,
+  aes(color = Epoch, alpha = 0.6),
+  columns = 2:5,
+  lower = list(continuous = my_fn),
+  upper = list(continuous = wrap("cor", size = 3)),
+  progress = FALSE
+) +
+  scale_color_manual(values = epoch_colors) +
+  scale_fill_manual(values = epoch_colors) +
+  theme_classic()
+
+ggsave("Figure2b_Shell-Allometry.png", Fig2b_chart, width = 10, height = 10, dpi = 300)
+
+# Statistical correlations
+correlation_tests <- list(
+  "Length~Width" = lm(Length_mm ~ Width_mm, data = Clean),
+  "Length~Globosity" = lm(Length_mm ~ Globosity_WoverL, data = Clean),
+  "Width~Globosity" = lm(Width_mm ~ Globosity_WoverL, data = Clean),
+  "Length~Geometric_Mean" = lm(Length_mm ~ Geometric_Mean, data = Clean),
+  "Width~Geometric_Mean" = lm(Width_mm ~ Geometric_Mean, data = Clean),
+  "Globosity~Geometric_Mean" = lm(Globosity_WoverL ~ Geometric_Mean, data = Clean)
+)
+
+cat("\n=== CORRELATION STATISTICS ===\n")
+for (i in seq_along(correlation_tests)) {
+  test <- correlation_tests[[i]]
+  cat(sprintf("%s: R² = %.4f, p = %.2e\n", 
+              names(correlation_tests)[i],
+              summary(test)$adj.r.squared,
+              summary(test)$coefficients[2, 4]))
+}
+
+# ==============================================================================
+# 3. LATITUDE AND SST ANALYSIS (Figure 3 & Supplemental Figure 1)
+# ==============================================================================
+
+# Supplemental Figure 1: Latitude vs SST
+SuppFig1 <- ggplot(Clean, aes(x = Latitude, y = Mean_SST, color = Epoch)) +
+  annotate("rect", ymin = -Inf, ymax = Inf, xmin = 32.56, xmax = 34.49,
+           alpha = 0.2, fill = "gray") +
+  geom_point(alpha = 0.4, size = 1) +
+  geom_smooth(aes(fill = Epoch), method = lm, se = TRUE, alpha = 0.2) +
+  geom_smooth(method = lm, color = "black", se = FALSE) +
+  scale_color_manual(values = epoch_colors) +
+  scale_fill_manual(values = epoch_colors) +
+  labs(x = "Latitude", y = "Mean SST (°C)") +
+  theme_custom()
+
+ggsave("SuppFig1_Latitude-SST.png", SuppFig1, width = 8, height = 6, dpi = 300)
+
+# Function for latitude/SST scatter plots
+create_scatter_plot <- function(data, x_var, y_var, 
+                                x_label = NULL, y_label = NULL,
+                                show_epoch_regression = TRUE) {
+  
+  plot <- ggplot(data, aes_string(x = x_var, y = y_var, color = "Epoch")) +
+    geom_point(alpha = 0.4, size = 1) +
+    scale_color_manual(values = epoch_colors) +
+    labs(x = ifelse(is.null(x_label), x_var, x_label),
+         y = ifelse(is.null(y_label), y_var, y_label)) +
+    theme_custom() +
+    theme(legend.position = "none")
+  
+  if (show_epoch_regression) {
+    plot <- plot + 
+      geom_smooth(aes(fill = Epoch), method = lm, se = TRUE, alpha = 0.2) +
+      scale_fill_manual(values = epoch_colors)
+  }
+  
+  plot <- plot + geom_smooth(method = lm, color = "black", se = FALSE)
+  
+  return(plot)
+}
+
+# Figure 3a-d: Size and shape vs Latitude and SST
+Fig3a <- create_scatter_plot(Clean, "Latitude", "Length_mm", 
+                             "Latitude", "Size (Length, mm)")
+Fig3b <- create_scatter_plot(Clean, "Mean_SST", "Length_mm",
+                             "Mean SST (°C)", "Size (Length, mm)")
+Fig3c <- create_scatter_plot(Clean, "Latitude", "Globosity_WoverL",
+                             "Latitude", "Shape (Globosity, W/L)")
+Fig3d <- create_scatter_plot(Clean, "Mean_SST", "Globosity_WoverL",
+                             "Mean SST (°C)", "Shape (Globosity, W/L)")
+
+# Combine plots
+Figure3 <- plot_grid(Fig3a, Fig3b, Fig3c, Fig3d, 
+                     labels = c("A", "B", "C", "D"), 
+                     label_size = 12, ncol = 2)
+ggsave("Figure3_Size-Shape-Lat-SST.png", Figure3, width = 12, height = 10, dpi = 300)
+
+# ==============================================================================
+# 4. ECOREGION AND COASTAL PROXIMITY ANALYSIS (Figure 4 & Supplemental Figure 2)
+# ==============================================================================
+
+# Supplemental Figure 2: SST by ecoregion and proximity
+create_sst_boxplot <- function(epoch_data, title) {
+  ggplot(epoch_data, aes(x = Ecoregion, y = Mean_SST, fill = Coastal_Proximity)) +
+    geom_boxplot(alpha = 0.7) +
+    coord_cartesian(ylim = c(9.5, 20)) +
+    labs(title = title, x = "Ecoregion", y = "Mean SST (°C)") +
+    scale_fill_brewer(palette = "Set2") +
+    theme_custom() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+SuppFig2a <- create_sst_boxplot(filter(Clean, Epoch == "Pleistocene"), "(a) Pleistocene")
+SuppFig2b <- create_sst_boxplot(filter(Clean, Epoch == "Holocene"), "(b) Holocene")
+SuppFig2c <- create_sst_boxplot(filter(Clean, Epoch == "Anthropocene"), "(c) Anthropocene")
+
+# Save supplemental figures
+ggsave("SuppFig2a_SST-Pleistocene.png", SuppFig2a, width = 8, height = 6, dpi = 300)
+ggsave("SuppFig2b_SST-Holocene.png", SuppFig2b, width = 8, height = 6, dpi = 300)
+ggsave("SuppFig2c_SST-Anthropocene.png", SuppFig2c, width = 8, height = 6, dpi = 300)
+
+# Figure 4: Morphology by ecoregion and proximity
+create_morphology_boxplot <- function(epoch_data, y_var, y_label, 
+                                      y_limits = NULL, title = "") {
+  
+  plot <- ggplot(epoch_data, aes(x = Ecoregion, y = .data[[y_var]], 
+                                 fill = Coastal_Proximity)) +
+    geom_boxplot(alpha = 0.7) +
+    labs(title = title, x = "Ecoregion", y = y_label) +
+    scale_fill_brewer(palette = "Set2") +
+    theme_custom() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  if (!is.null(y_limits)) {
+    plot <- plot + coord_cartesian(ylim = y_limits)
+  }
+  
+  return(plot)
+}
+
+# Create all Figure 4 plots
+fig4_plots <- list()
+epochs <- c("Pleistocene", "Holocene", "Anthropocene")
+variables <- list(
+  list(var = "Geometric_Mean", label = "Mass (Geometric Mean)", limits = c(3, 24)),
+  list(var = "Globosity_WoverL", label = "Shape (Globosity, W/L)", limits = c(0.4, 0.72))
+)
+
+for (i in seq_along(epochs)) {
+  epoch_data <- filter(Clean, Epoch == epochs[i])
+  
+  for (j in seq_along(variables)) {
+    var_info <- variables[[j]]
+    plot_index <- (i - 1) * 2 + j
+    
+    fig4_plots[[plot_index]] <- create_morphology_boxplot(
+      epoch_data, 
+      var_info$var, 
+      var_info$label,
+      var_info$limits,
+      paste0("(", letters[plot_index], ") ", epochs[i])
+    )
+  }
+}
+
+# Combine and save Figure 4
+Figure4 <- plot_grid(plotlist = fig4_plots, ncol = 2, labels = "AUTO", label_size = 12)
+ggsave("Figure4_Ecoregion-Proximity.png", Figure4, width = 12, height = 14, dpi = 300)
+
+# ==============================================================================
+# 5. STATISTICAL MODELS (Tables 1-2)
+# ==============================================================================
+
+# Function to fit and summarize models
+fit_model <- function(formula, data, model_name = "") {
+  model <- lm(formula, data = data)
+  cat(sprintf("\n=== %s ===\n", model_name))
+  print(summary(model))
+  return(model)
+}
+
+# Table 1: Latitude and SST models
+cat("\n" + strrep("=", 60) + "\n")
+cat("TABLE 1: LATITUDE AND SST MODELS\n")
+cat(strrep("=", 60) + "\n")
+
+table1_models <- list(
+  "Width ~ Latitude + Epoch + Latitude:Epoch" = 
+    lm(Width_mm ~ Latitude + Epoch + Latitude:Epoch, data = Clean),
+  "Width ~ Mean_SST + Epoch + Mean_SST:Epoch" = 
+    lm(Width_mm ~ Mean_SST + Epoch + Mean_SST:Epoch, data = Clean),
+  "Globosity ~ Latitude + Epoch + Latitude:Epoch" = 
+    lm(Globosity_WoverL ~ Latitude + Epoch + Latitude:Epoch, data = Clean),
+  "Globosity ~ Mean_SST + Epoch + Mean_SST:Epoch" = 
+    lm(Globosity_WoverL ~ Mean_SST + Epoch + Mean_SST:Epoch, data = Clean)
+)
+
+for (i in seq_along(table1_models)) {
+  cat(sprintf("\n%s:\n", names(table1_models)[i]))
+  print(summary(table1_models[[i]]))
+}
+
+# Table 2: Ecoregion and proximity models
+cat("\n" + strrep("=", 60) + "\n")
+cat("TABLE 2: ECOREGION AND PROXIMITY MODELS\n")
+cat(strrep("=", 60) + "\n")
+
+table2_models <- list()
+for (epoch in epochs) {
+  epoch_data <- filter(Clean, Epoch == epoch)
+  
+  table2_models[[paste0(epoch, "_Width")]] <- 
+    lm(Width_mm ~ Ecoregion + Coastal_Proximity + Ecoregion:Coastal_Proximity, 
+       data = epoch_data)
+  
+  table2_models[[paste0(epoch, "_Globosity")]] <- 
+    lm(Globosity_WoverL ~ Ecoregion + Coastal_Proximity + Ecoregion:Coastal_Proximity, 
+       data = epoch_data)
+}
+
+for (i in seq_along(table2_models)) {
+  cat(sprintf("\n%s:\n", names(table2_models)[i]))
+  print(summary(table2_models[[i]]))
+}
+
+# ==============================================================================
+# 6. HUMAN POPULATION DENSITY ANALYSIS (Supplemental Figure 3)
+# ==============================================================================
+
+# Prepare data for human population analysis
+SuppFig3_data <- Clean %>%
+  filter(Epoch != "Pleistocene", Collection != "PR", Population_Density > 0) %>%
+  mutate(
+    Human_pop = cut(Population_Density,
+                    breaks = quantile(Population_Density, probs = c(0, 0.33, 0.66, 1)),
+                    labels = c("Low", "Medium", "High"),
+                    include.lowest = TRUE)
+  )
+
+# Create population density plots
+create_population_plot <- function(data, y_var, y_label) {
+  ggplot(data, aes(x = Decade, y = .data[[y_var]], color = Human_pop)) +
+    geom_point(alpha = 0.4, size = 1) +
+    geom_smooth(aes(fill = Human_pop), method = lm, se = TRUE, alpha = 0.2) +
+    geom_smooth(method = lm, color = "black", se = FALSE) +
+    labs(x = "Decade", y = y_label) +
+    scale_color_brewer(palette = "Set1") +
+    scale_fill_brewer(palette = "Set1") +
+    theme_custom()
+}
+
+SuppFig3a <- create_population_plot(SuppFig3_data, "Width_mm", "Size (Width, mm)")
+SuppFig3b <- create_population_plot(SuppFig3_data, "Globosity_WoverL", "Shape (Globosity, W/L)")
+
+ggsave("SuppFig3a_Population-Width.png", SuppFig3a, width = 8, height = 6, dpi = 300)
+ggsave("SuppFig3b_Population-Globosity.png", SuppFig3b, width = 8, height = 6, dpi = 300)
+
+# ==============================================================================
+# 7. COPE'S RULE ANALYSIS
+# ==============================================================================
+
+# Prepare Cope's Rule data
+Copes_data <- Clean %>%
+  select(Location, Epoch, Width_mm, Length_mm, Globosity_WoverL) %>%
+  drop_na()
+
+# Function for Cope's Rule bar plots
+create_copes_plot <- function(data, y_var, y_label, group_by_location = FALSE) {
+  
+  plot_data <- if (group_by_location) {
+    data %>%
+      group_by(Epoch, Location) %>%
+      summarise(
+        mean_value = mean(.data[[y_var]], na.rm = TRUE),
+        se = sd(.data[[y_var]], na.rm = TRUE) / sqrt(n()),
+        .groups = "drop"
+      )
+  } else {
+    data %>%
+      group_by(Epoch) %>%
+      summarise(
+        mean_value = mean(.data[[y_var]], na.rm = TRUE),
+        se = sd(.data[[y_var]], na.rm = TRUE) / sqrt(n()),
+        .groups = "drop"
+      )
+  }
+  
+  plot <- ggplot(plot_data, aes(x = if(group_by_location) Location else Epoch, 
+                                y = mean_value, fill = Epoch)) +
+    geom_bar(stat = "identity", position = position_dodge(0.9)) +
+    geom_errorbar(aes(ymin = mean_value - se, ymax = mean_value + se),
+                  width = 0.2, position = position_dodge(0.9)) +
+    labs(x = if(group_by_location) "Location" else "Epoch", y = y_label) +
+    scale_fill_manual(values = epoch_colors) +
+    theme_custom() +
+    theme(axis.text.x = element_text(angle = if(group_by_location) 45 else 0, hjust = 1))
+  
+  return(plot)
+}
+
+# Create Cope's Rule plots
+Copes_Width <- create_copes_plot(Copes_data, "Width_mm", "Width (mm)")
+Copes_Width_byLoc <- create_copes_plot(Copes_data, "Width_mm", "Width (mm)", TRUE)
+Copes_Globosity <- create_copes_plot(Copes_data, "Globosity_WoverL", "Globosity (W/L)")
+Copes_Globosity_byLoc <- create_copes_plot(Copes_data, "Globosity_WoverL", "Globosity (W/L)", TRUE)
+
+# Save Cope's Rule plots
+ggsave("Copes_Width_Epoch.png", Copes_Width, width = 8, height = 6, dpi = 300)
+ggsave("Copes_Width_byLocation.png", Copes_Width_byLoc, width = 10, height = 6, dpi = 300)
+ggsave("Copes_Globosity_Epoch.png", Copes_Globosity, width = 8, height = 6, dpi = 300)
+ggsave("Copes_Globosity_byLocation.png", Copes_Globosity_byLoc, width = 10, height = 6, dpi = 300)
+
+# ==============================================================================
+# 8. SUMMARY AND EXPORT
+# ==============================================================================
+
+cat("\n" + strrep("=", 60) + "\n")
+cat("ANALYSIS COMPLETE\n")
+cat(strrep("=", 60) + "\n")
+
+# Summary statistics
+summary_stats <- Clean %>%
+  group_by(Epoch, Data_Type) %>%
+  summarise(
+    N = n(),
+    Mean_Length = mean(Length_mm, na.rm = TRUE),
+    SD_Length = sd(Length_mm, na.rm = TRUE),
+    Mean_Width = mean(Width_mm, na.rm = TRUE),
+    SD_Width = sd(Width_mm, na.rm = TRUE),
+    Mean_Globosity = mean(Globosity_WoverL, na.rm = TRUE),
+    SD_Globosity = sd(Globosity_WoverL, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+cat("\nSummary Statistics by Epoch and Data Type:\n")
+print(summary_stats, n = Inf)
+
+# List generated files
+cat("\nGenerated Files:\n")
+cat("1. Figure2b_Shell-Allometry.png - Correlation matrix\n")
+cat("2. Figure3_Size-Shape-Lat-SST.png - Latitude/SST relationships\n")
+cat("3. Figure4_Ecoregion-Proximity.png - Ecoregion/proximity analysis\n")
+cat("4. SuppFig1_Latitude-SST.png - Supplemental latitude vs SST\n")
+cat("5. SuppFig2a/b/c_SST-*.png - Supplemental SST by ecoregion\n")
+cat("6. SuppFig3a/b_Population-*.png - Human population effects\n")
+cat("7. Copes_*.png - Cope's Rule analysis\n")
+
+# Save summary data
+write.csv(summary_stats, "Summary_Statistics.csv", row.names = FALSE)
+cat("\nSummary statistics saved to: Summary_Statistics.csv\n")
+
+cat("\n=== END OF ANALYSIS ===\n")
+```
 
 
 Data Clean-up        Post-processing: Raw -> Clean + SoCal       
