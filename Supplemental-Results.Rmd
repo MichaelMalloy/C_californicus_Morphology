@@ -1,18 +1,1009 @@
 ---
 title: "Bergmann’s Rule across the Pleistocene, Holocene, and Anthropocene in an Eastern Pacific neogastropod, Californiconus californicus (Reeve, 1844) (Gastropoda: Conidae)"
 author: "Malloy and Ul-Hasan et al"
-date: "Jan 14, 2026"
+date: "Feb 6, 2026"
 output:
   pdf_document: default
 ---
 
-Last edited [Sabah Ul-Hasan]: Jan 14, 2026
+Last edited [Sabah Ul-Hasan]: Feb 6, 2026
 
 https://github.com/MichaelMalloy/C_californicus_Morphology
 
 Contributors of data by order of contribution: MM, SUH, SC, CAO, JKK, WFG
 Contributors of code by order of contribution: SUH, LL, MM, SS, CAO
 
+
+
+```{r}
+
+# ==============================================================================
+# COMPLETE ANALYSIS SCRIPT FOR C. californicus MORPHOLOGY STUDY
+# Fixed for compatibility with older R versions
+# ==============================================================================
+
+# Install required packages
+required_packages <- c("tidyverse", "PerformanceAnalytics", "GGally", "cowplot",
+                       "ggsignif", "ggpubr", "broom", "effectsize", "nlme",
+                       "lme4", "mgcv", "MASS", "car", "lmtest", "boot",
+                       "lubridate", "gridExtra", "RCurl", "emmeans", "pwr",
+                       "sf", "ggspatial", "maps", "mapdata")
+
+# Function to safely install packages
+install_if_missing <- function(packages) {
+  for(pkg in packages) {
+    if(!require(pkg, character.only = TRUE, quietly = TRUE)) {
+      message(paste("Installing", pkg, "..."))
+      install.packages(pkg, dependencies = TRUE, repos = "https://cloud.r-project.org", quiet = TRUE)
+    }
+  }
+}
+
+# Install packages
+install_if_missing(required_packages)
+
+# Load packages
+library(tidyverse)
+library(PerformanceAnalytics)
+library(GGally)
+library(cowplot)
+library(ggsignif)
+library(ggpubr)
+library(broom)
+library(effectsize)
+library(nlme)
+library(lme4)
+library(mgcv)
+library(MASS)
+library(car)
+library(lmtest)
+library(boot)
+library(lubridate)
+library(gridExtra)
+library(RCurl)
+library(emmeans)
+library(pwr)
+library(sf)
+library(ggspatial)
+library(maps)
+library(mapdata)
+
+# Set seed for reproducibility
+set.seed(12345)
+
+# ==============================================================================
+# 1. DATA LOADING AND CLEANING
+# ==============================================================================
+
+# Function to load data from your specific GitHub structure
+load_data_from_github <- function() {
+  
+  cat("=== LOADING DATA FROM GITHUB ===\n")
+  
+  # Define GitHub base URL
+  base_url <- "https://raw.githubusercontent.com/sabahzero/C_californicus_Morphology/main/"
+  
+  # List of files to load
+  files <- list(
+    raw = "SupplementalTable2_Data-Raw.csv",
+    clean = "SupplementalTable3_Data-Clean.csv",
+    socal = "SupplementalTable4_Data-SoCal.csv",
+    key = "SupplementalTable1_Data-Key.csv",
+    inat_raw = "data/Data-iNat-Raw.csv",
+    raw2 = "data/Data-Raw.csv"
+  )
+  
+  # Function to try loading a file
+  try_load <- function(filename, description) {
+    url <- paste0(base_url, filename)
+    cat(paste0("\nTrying to load ", description, " from:\n", url, "\n"))
+    
+    tryCatch({
+      data <- read.csv(text = getURL(url), stringsAsFactors = FALSE)
+      cat(paste0("✓ Successfully loaded ", description, " (", nrow(data), " rows)\n"))
+      return(data)
+    }, error = function(e) {
+      cat(paste0("✗ Failed to load ", description, ": ", e$message, "\n"))
+      return(NULL)
+    })
+  }
+  
+  # Try to load each file
+  data_list <- list()
+  
+  # Try SupplementalTable2_Data-Raw.csv first (main raw data)
+  data_list$raw <- try_load(files$raw, "raw data")
+  
+  # If that fails, try data/Data-Raw.csv
+  if(is.null(data_list$raw)) {
+    data_list$raw <- try_load(files$raw2, "alternative raw data")
+  }
+  
+  # Try already cleaned data
+  data_list$clean <- try_load(files$clean, "cleaned data")
+  data_list$socal <- try_load(files$socal, "SoCal data")
+  data_list$key <- try_load(files$key, "data key")
+  data_list$inat <- try_load(files$inat_raw, "iNaturalist data")
+  
+  # Check what we have
+  cat("\n=== DATA LOADING SUMMARY ===\n")
+  loaded_files <- names(data_list)[!sapply(data_list, is.null)]
+  cat("Successfully loaded:", paste(loaded_files, collapse = ", "), "\n")
+  
+  if(is.null(data_list$raw) && is.null(data_list$clean)) {
+    stop("Could not load any data files. Please check your GitHub repository structure.")
+  }
+  
+  return(data_list)
+}
+
+# Function to clean data (if raw data is available)
+clean_raw_data <- function(raw_data) {
+  
+  cat("\n=== CLEANING RAW DATA ===\n")
+  
+  # Make a copy
+  data <- raw_data
+  
+  # Check required columns
+  required_cols <- c("Epoch", "Latitude", "Longitude", "Length_mm", "Width_mm")
+  missing_cols <- setdiff(required_cols, names(data))
+  
+  if(length(missing_cols) > 0) {
+    cat("Warning: Missing required columns:", paste(missing_cols, collapse = ", "), "\n")
+    cat("Attempting to proceed with available columns...\n")
+  }
+  
+  # Clean data step by step
+  cat("\n1. Removing Pliocene specimens...\n")
+  if("Epoch" %in% names(data)) {
+    data <- data %>% filter(Epoch != "Pliocene")
+    cat("Rows after removing Pliocene:", nrow(data), "\n")
+  }
+  
+  cat("\n2. Filtering latitude range...\n")
+  if(all(c("Latitude") %in% names(data))) {
+    data <- data %>% 
+      filter(Latitude > 26.43 & Latitude < 38.16)
+    cat("Rows after latitude filtering:", nrow(data), "\n")
+  }
+  
+  cat("\n3. Filtering size outliers...\n")
+  if("Length_mm" %in% names(data)) {
+    data <- data %>% 
+      filter(Length_mm >= 5 & Length_mm <= 50)
+    cat("Rows after length filtering:", nrow(data), "\n")
+  }
+  
+  if("Width_mm" %in% names(data)) {
+    data <- data %>% 
+      filter(Width_mm >= 2 & Width_mm <= 30)
+    cat("Rows after width filtering:", nrow(data), "\n")
+  }
+  
+  if(all(c("Width_mm", "Length_mm") %in% names(data))) {
+    data <- data %>% 
+      mutate(Globosity_WoverL = Width_mm / Length_mm) %>% 
+      filter(Globosity_WoverL >= 0.3 & Globosity_WoverL <= 0.8)
+    cat("Rows after globosity filtering:", nrow(data), "\n")
+  }
+  
+  cat("\n4. Calculating derived metrics...\n")
+  if(all(c("Length_mm", "Width_mm") %in% names(data)) && 
+     !("Geometric_Mean" %in% names(data))) {
+    data <- data %>% 
+      mutate(
+        Geometric_Mean = sqrt(Length_mm * Width_mm)
+      )
+  }
+  
+  if(all(c("Width_mm", "Length_mm") %in% names(data)) && 
+     !("Globosity_WoverL" %in% names(data))) {
+    data <- data %>% 
+      mutate(
+        Globosity_WoverL = Width_mm / Length_mm
+      )
+  }
+  
+  cat("\n5. Grouping by lot...\n")
+  if("Lot_Number" %in% names(data)) {
+    data <- data %>% 
+      group_by(Lot_Number) %>% 
+      mutate(Specimens_per_Lot = n()) %>% 
+      ungroup() %>% 
+      filter(Specimens_per_Lot > 2 | Collection == "iNat" | is.na(Collection))
+    cat("Rows after lot filtering:", nrow(data), "\n")
+  }
+  
+  cat("\n6. Creating factors...\n")
+  if("Epoch" %in% names(data)) {
+    data <- data %>% 
+      mutate(
+        Epoch = factor(Epoch, levels = c("Pleistocene", "Holocene", "Anthropocene"))
+      )
+  }
+  
+  if("Collection" %in% names(data)) {
+    data <- data %>% 
+      mutate(
+        Data_Type = ifelse(Collection == "iNat", "iNaturalist", "Museum/Field"),
+        Data_Type = factor(Data_Type)
+      )
+  }
+  
+  if("Ecoregion" %in% names(data)) {
+    data$Ecoregion <- factor(data$Ecoregion)
+  }
+  
+  if("Coastal_Proximity" %in% names(data)) {
+    data$Coastal_Proximity <- factor(data$Coastal_Proximity)
+  }
+  
+  cat("\n✓ Data cleaning complete\n")
+  cat("Final dataset:", nrow(data), "rows\n")
+  
+  return(data)
+}
+
+# Main data loading function
+load_and_clean_data <- function() {
+  
+  # Load data from GitHub
+  data_list <- load_data_from_github()
+  
+  # Determine which data to use
+  if(!is.null(data_list$clean)) {
+    cat("\nUsing pre-cleaned data from SupplementalTable3_Data-Clean.csv\n")
+    Clean <- data_list$clean
+    
+    # Ensure factors are set correctly
+    if("Epoch" %in% names(Clean)) {
+      Clean <- Clean %>% 
+        mutate(
+          Epoch = factor(Epoch, levels = c("Pleistocene", "Holocene", "Anthropocene"))
+        )
+    }
+    
+    if("Collection" %in% names(Clean)) {
+      Clean <- Clean %>% 
+        mutate(
+          Data_Type = factor(ifelse(Collection == "iNat", "iNaturalist", "Museum/Field"))
+        )
+    }
+    
+  } else if(!is.null(data_list$raw)) {
+    cat("\nCleaning raw data from SupplementalTable2_Data-Raw.csv\n")
+    Clean <- clean_raw_data(data_list$raw)
+  } else {
+    stop("No usable data found")
+  }
+  
+  # Check for SoCal data or create it
+  if(!is.null(data_list$socal)) {
+    cat("\nUsing pre-existing SoCal data\n")
+    SoCal <- data_list$socal
+  } else {
+    cat("\nCreating SoCal subset...\n")
+    socal_counties <- c("Santa Barbara", "Ventura", "Los Angeles", "Orange", "San Diego")
+    
+    if("County" %in% names(Clean)) {
+      SoCal <- Clean %>% filter(County %in% socal_counties)
+      cat("SoCal subset created:", nrow(SoCal), "rows\n")
+    } else {
+      cat("Warning: County column not found. Cannot create SoCal subset.\n")
+      SoCal <- NULL
+    }
+  }
+  
+  # Convert to sf object for spatial operations (only if coordinates available)
+  if(all(c("Longitude", "Latitude") %in% names(Clean))) {
+    cat("\nConverting to sf object for spatial analysis...\n")
+    
+    # Remove rows with missing coordinates
+    Clean_sf <- Clean %>% 
+      filter(!is.na(Longitude) & !is.na(Latitude))
+    
+    if(nrow(Clean_sf) > 0) {
+      Clean_sf <- st_as_sf(Clean_sf, coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE)
+      cat("Converted", nrow(Clean_sf), "rows to sf object\n")
+      
+      # Merge back with unconverted rows
+      Clean_not_sf <- Clean %>% 
+        filter(is.na(Longitude) | is.na(Latitude))
+      
+      if(nrow(Clean_not_sf) > 0) {
+        Clean_not_sf$geometry <- st_sfc(rep(st_point(), nrow(Clean_not_sf)), crs = 4326)
+        Clean <- rbind(Clean_sf, Clean_not_sf)
+      } else {
+        Clean <- Clean_sf
+      }
+    } else {
+      cat("Warning: No rows with valid coordinates. Skipping sf conversion.\n")
+    }
+  } else {
+    cat("\nWarning: Coordinate columns not found. Skipping sf conversion.\n")
+  }
+  
+  # Save cleaned data (remove geometry for CSV)
+  if(inherits(Clean, "sf")) {
+    Clean_csv <- as.data.frame(Clean)
+    # Remove geometry column if it exists
+    if("geometry" %in% names(Clean_csv)) {
+      Clean_csv$geometry <- NULL
+    }
+  } else {
+    Clean_csv <- Clean
+  }
+  
+  write.csv(Clean_csv, "Data_Clean.csv", row.names = FALSE)
+  
+  if(!is.null(SoCal)) {
+    write.csv(SoCal, "Data_SoCal.csv", row.names = FALSE)
+  }
+  
+  cat("\n✓ Data saved:\n")
+  cat("  Data_Clean.csv\n")
+  if(!is.null(SoCal)) cat("  Data_SoCal.csv\n")
+  
+  return(list(Clean = Clean, SoCal = SoCal))
+}
+
+# ==============================================================================
+# 2. SIMPLIFIED MAP CREATION
+# ==============================================================================
+
+# Function to create simple maps without requiring shapefiles
+create_simple_maps <- function(data) {
+  
+  cat("\n=== CREATING SIMPLE MAPS ===\n")
+  
+  # Remove geometry if it's an sf object
+  if(inherits(data, "sf")) {
+    data_df <- as.data.frame(data)
+    # Remove geometry column if it exists
+    if("geometry" %in% names(data_df)) {
+      data_df$geometry <- NULL
+    }
+  } else {
+    data_df <- data
+  }
+  
+  # Check for required columns
+  if(!all(c("Longitude", "Latitude", "Epoch") %in% names(data_df))) {
+    cat("Warning: Missing required columns for mapping\n")
+    return(NULL)
+  }
+  
+  # Define epoch colors
+  epoch_colors <- c("Pleistocene" = "#00AFBB", 
+                    "Holocene" = "#E7B800", 
+                    "Anthropocene" = "#FC4E07")
+  
+  # Get California and Mexico map data
+  cat("Loading map data...\n")
+  
+  # Get world data
+  world <- map_data("world")
+  
+  # Filter for relevant regions
+  study_area <- world %>%
+    filter((region %in% c("USA", "Canada", "Mexico") & 
+             long >= -130 & long <= -110 & lat >= 15 & lat <= 50) |
+           (region == "Mexico" & long >= -130 & long <= -110))
+  
+  # Create base map
+  base_map <- ggplot() +
+    geom_polygon(data = study_area,
+                 aes(x = long, y = lat, group = group),
+                 fill = "gray90", color = "gray70", size = 0.2) +
+    coord_fixed(xlim = c(-125, -110), ylim = c(22, 42), ratio = 1.3) +
+    theme_minimal() +
+    theme(
+      panel.grid = element_blank(),
+      axis.text = element_text(size = 10),
+      axis.title = element_text(size = 12, face = "bold")
+    )
+  
+  # Figure 1A: All collection points
+  fig1a <- base_map +
+    geom_point(data = data_df,
+               aes(x = Longitude, y = Latitude, color = Epoch),
+               alpha = 0.3, size = 1) +
+    scale_color_manual(values = epoch_colors) +
+    labs(title = "All Collection Locations",
+         x = "Longitude", y = "Latitude",
+         color = "Epoch") +
+    theme(legend.position = "bottom")
+  
+  # Figure 1B: With density contours
+  fig1b <- base_map +
+    stat_density_2d(data = data_df,
+                    aes(x = Longitude, y = Latitude, fill = ..level..),
+                    geom = "polygon", alpha = 0.3, bins = 20) +
+    geom_point(data = data_df,
+               aes(x = Longitude, y = Latitude, color = Epoch),
+               alpha = 0.3, size = 1) +
+    scale_color_manual(values = epoch_colors) +
+    scale_fill_gradient(low = "blue", high = "red", guide = "none") +
+    labs(title = "Collection Density",
+         x = "Longitude", y = "Latitude",
+         color = "Epoch") +
+    theme(legend.position = "bottom")
+  
+  # Combine plots
+  figure1 <- plot_grid(fig1a, fig1b, 
+                       labels = c("A", "B"), 
+                       label_size = 14,
+                       ncol = 2)
+  
+  # Save figure
+  ggsave("Figure1_Collection_Maps.png", figure1, 
+         width = 14, height = 6, dpi = 300, bg = "white")
+  
+  cat("✓ Figure 1 saved to: Figure1_Collection_Maps.png\n")
+  
+  return(list(figure1 = figure1))
+}
+
+# ==============================================================================
+# 3. CORE ANALYSIS FUNCTIONS (COMPATIBLE WITH OLDER R VERSIONS)
+# ==============================================================================
+
+# Function to test statistical assumptions
+test_assumptions <- function(data) {
+  
+  cat("\n=== TESTING STATISTICAL ASSUMPTIONS ===\n")
+  
+  # Remove geometry if data is sf
+  if(inherits(data, "sf")) {
+    data_df <- as.data.frame(data)
+    # Remove geometry column if it exists
+    if("geometry" %in% names(data_df)) {
+      data_df$geometry <- NULL
+    }
+  } else {
+    data_df <- data
+  }
+  
+  results <- list()
+  
+  # Check for required variables
+  if(!"Length_mm" %in% names(data_df)) {
+    cat("Warning: Length_mm not found in data\n")
+    return(NULL)
+  }
+  
+  # 1. Normality test
+  cat("\n1. Normality test for Length_mm:\n")
+  shapiro_test <- shapiro.test(data_df$Length_mm)
+  cat("Shapiro-Wilk: W =", round(shapiro_test$statistic, 4),
+      "p =", format.pval(shapiro_test$p.value, digits = 3), "\n")
+  
+  is_normal <- shapiro_test$p.value > 0.05
+  cat("Data is", ifelse(is_normal, "NORMALLY", "NOT NORMALLY"), "distributed\n")
+  
+  # 2. Homogeneity of variance by epoch
+  if("Epoch" %in% names(data_df) && length(unique(data_df$Epoch)) > 1) {
+    cat("\n2. Homogeneity of variance by epoch:\n")
+    levene_test <- leveneTest(Length_mm ~ Epoch, data = data_df)
+    cat("Levene's test: F =", round(levene_test$`F value`[1], 4),
+        "p =", format.pval(levene_test$`Pr(>F)`[1], digits = 3), "\n")
+    
+    equal_var <- levene_test$`Pr(>F)`[1] > 0.05
+    cat("Variances are", ifelse(equal_var, "EQUAL", "UNEQUAL"), "across epochs\n")
+  }
+  
+  # 3. Create diagnostic plots
+  cat("\n3. Creating diagnostic plots...\n")
+  
+  # Histogram
+  hist_plot <- ggplot(data_df, aes(x = Length_mm)) +
+    geom_histogram(aes(y = ..density..), bins = 30, fill = "lightblue", color = "black") +
+    geom_density(alpha = 0.5, fill = "red") +
+    labs(title = "Distribution of Shell Length",
+         x = "Length (mm)", y = "Density") +
+    theme_minimal()
+  
+  # QQ plot
+  qq_data <- data.frame(
+    Theoretical = qqnorm(data_df$Length_mm, plot.it = FALSE)$x,
+    Sample = qqnorm(data_df$Length_mm, plot.it = FALSE)$y
+  )
+  
+  qq_plot <- ggplot(qq_data, aes(x = Theoretical, y = Sample)) +
+    geom_point(alpha = 0.5) +
+    geom_qq_line(aes(sample = Sample), color = "red") +
+    labs(title = "Normal Q-Q Plot",
+         x = "Theoretical Quantiles", y = "Sample Quantiles") +
+    theme_minimal()
+  
+  # Save diagnostic plots
+  diagnostic_plots <- plot_grid(hist_plot, qq_plot, ncol = 2)
+  ggsave("Figure_Diagnostics.png", diagnostic_plots, 
+         width = 12, height = 5, dpi = 300)
+  
+  cat("✓ Diagnostic plots saved to: Figure_Diagnostics.png\n")
+  
+  return(results)
+}
+
+# Function to analyze Bergmann's Rule
+analyze_bergmanns_rule <- function(data) {
+  
+  cat("\n=== ANALYZING BERGMANN'S RULE ===\n")
+  
+  # Remove geometry if data is sf
+  if(inherits(data, "sf")) {
+    data_df <- as.data.frame(data)
+    # Remove geometry column if it exists
+    if("geometry" %in% names(data_df)) {
+      data_df$geometry <- NULL
+    }
+  } else {
+    data_df <- data
+  }
+  
+  # Check required columns
+  required <- c("Length_mm", "Latitude", "Epoch")
+  missing <- setdiff(required, names(data_df))
+  
+  if(length(missing) > 0) {
+    cat("Warning: Missing required columns:", paste(missing, collapse = ", "), "\n")
+    return(NULL)
+  }
+  
+  results <- list()
+  
+  # 1. Overall relationship
+  cat("\n1. Overall relationship: Length ~ Latitude\n")
+  lm_overall <- lm(Length_mm ~ Latitude, data = data_df)
+  summary_overall <- summary(lm_overall)
+  
+  cat("Intercept:", round(coef(lm_overall)[1], 4), "\n")
+  cat("Slope:", round(coef(lm_overall)[2], 4), "mm per degree latitude\n")
+  cat("R-squared:", round(summary_overall$r.squared, 4), "\n")
+  cat("Adjusted R-squared:", round(summary_overall$adj.r.squared, 4), "\n")
+  cat("p-value:", format.pval(summary_overall$coefficients[2, 4], digits = 3), "\n")
+  
+  # 2. By epoch
+  cat("\n2. By epoch: Length ~ Latitude * Epoch\n")
+  lm_epoch <- lm(Length_mm ~ Latitude * Epoch, data = data_df)
+  anova_epoch <- anova(lm_epoch)
+  print(anova_epoch)
+  
+  # 3. Separate models for each epoch
+  cat("\n3. Separate models for each epoch:\n")
+  epoch_models <- list()
+  
+  for(epoch in levels(data_df$Epoch)) {
+    epoch_data <- data_df %>% filter(Epoch == epoch)
+    
+    if(nrow(epoch_data) > 10) {  # Need sufficient data
+      lm_epoch_specific <- lm(Length_mm ~ Latitude, data = epoch_data)
+      epoch_models[[epoch]] <- lm_epoch_specific
+      
+      cat("\n", epoch, ":\n", sep = "")
+      cat("  n =", nrow(epoch_data), "\n")
+      cat("  Slope =", round(coef(lm_epoch_specific)[2], 4), "\n")
+      cat("  R² =", round(summary(lm_epoch_specific)$r.squared, 4), "\n")
+      cat("  p =", format.pval(summary(lm_epoch_specific)$coefficients[2, 4], digits = 3), "\n")
+    }
+  }
+  
+  # 4. Create Bergmann's Rule plot
+  cat("\n4. Creating Bergmann's Rule visualization...\n")
+  
+  epoch_colors <- c("Pleistocene" = "#00AFBB", 
+                    "Holocene" = "#E7B800", 
+                    "Anthropocene" = "#FC4E07")
+  
+  bergmann_plot <- ggplot(data_df, aes(x = Latitude, y = Length_mm, color = Epoch)) +
+    geom_point(alpha = 0.3, size = 1.5) +
+    geom_smooth(aes(fill = Epoch), method = "lm", se = TRUE, alpha = 0.2) +
+    geom_smooth(method = "lm", color = "black", se = FALSE, size = 0.5) +
+    scale_color_manual(values = epoch_colors) +
+    scale_fill_manual(values = epoch_colors) +
+    labs(
+      title = "Bergmann's Rule in Californiconus californicus",
+      x = "Latitude (°N)",
+      y = "Shell Length (mm)",
+      subtitle = paste("Overall slope =", round(coef(lm_overall)[2], 4), 
+                      "mm/degree, R² =", round(summary_overall$r.squared, 3))
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 12, hjust = 0.5),
+      axis.title = element_text(size = 12, face = "bold"),
+      legend.position = "bottom",
+      legend.title = element_text(face = "bold")
+    )
+  
+  # Save plot
+  ggsave("Figure_Bergmanns_Rule.png", bergmann_plot, 
+         width = 10, height = 7, dpi = 300, bg = "white")
+  
+  cat("✓ Bergmann's Rule plot saved to: Figure_Bergmanns_Rule.png\n")
+  
+  # 5. Calculate effect sizes
+  cat("\n5. Calculating effect sizes...\n")
+  
+  # Split data by median latitude
+  lat_median <- median(data_df$Latitude, na.rm = TRUE)
+  data_df$Lat_group <- ifelse(data_df$Latitude > lat_median, "High", "Low")
+  
+  if(length(unique(data_df$Lat_group)) > 1) {
+    cohen_d_result <- cohens_d(Length_mm ~ Lat_group, data = data_df)
+    cat("Cohen's d for latitude effect:", round(cohen_d_result$Cohens_d, 3), "\n")
+    results$cohen_d <- cohen_d_result
+  }
+  
+  # Store results
+  results$models <- list(
+    overall = lm_overall,
+    epoch_interaction = lm_epoch,
+    epoch_specific = epoch_models
+  )
+  
+  results$plot <- bergmann_plot
+  
+  return(results)
+}
+
+# Function to create correlation matrix (compatible with older R)
+create_correlation_analysis <- function(data) {
+  
+  cat("\n=== CREATING CORRELATION ANALYSIS ===\n")
+  
+  # Remove geometry if data is sf
+  if(inherits(data, "sf")) {
+    data_df <- as.data.frame(data)
+    # Remove geometry column if it exists
+    if("geometry" %in% names(data_df)) {
+      data_df$geometry <- NULL
+    }
+  } else {
+    data_df <- data
+  }
+  
+  # Select numeric variables (compatible way for older R)
+  # Identify numeric columns
+  numeric_cols <- sapply(data_df, is.numeric)
+  
+  # Exclude specific columns if they exist
+  exclude_cols <- c("Specimen_Number", "Year", "Decade", "Month")
+  numeric_cols[names(data_df) %in% exclude_cols] <- FALSE
+  
+  # Get numeric variables
+  numeric_vars <- data_df[, numeric_cols, drop = FALSE]
+  
+  # Remove columns with too many NAs
+  na_counts <- colSums(is.na(numeric_vars))
+  numeric_vars <- numeric_vars[, na_counts < nrow(numeric_vars) * 0.5, drop = FALSE]
+  
+  if(ncol(numeric_vars) < 2) {
+    cat("Warning: Not enough numeric variables for correlation analysis\n")
+    cat("Numeric variables found:", paste(names(numeric_vars), collapse = ", "), "\n")
+    return(NULL)
+  }
+  
+  # Create correlation plot
+  cor_plot <- chart.Correlation(numeric_vars, 
+                               histogram = TRUE, 
+                               pch = 19,
+                               main = "Correlation Matrix of Morphological and Environmental Variables")
+  
+  # Save plot
+  png("Figure_Correlation_Matrix.png", width = 10, height = 10, units = "in", res = 300)
+  print(cor_plot)
+  dev.off()
+  
+  cat("✓ Correlation matrix saved to: Figure_Correlation_Matrix.png\n")
+  
+  # Calculate specific correlations of interest
+  cat("\nKey correlations:\n")
+  
+  if(all(c("Length_mm", "Width_mm") %in% names(data_df))) {
+    cor_length_width <- cor.test(data_df$Length_mm, data_df$Width_mm, use = "complete.obs")
+    cat("Length ~ Width: r =", round(cor_length_width$estimate, 4),
+        "p =", format.pval(cor_length_width$p.value, digits = 3), "\n")
+  }
+  
+  if(all(c("Length_mm", "Latitude") %in% names(data_df))) {
+    cor_length_lat <- cor.test(data_df$Length_mm, data_df$Latitude, use = "complete.obs")
+    cat("Length ~ Latitude: r =", round(cor_length_lat$estimate, 4),
+        "p =", format.pval(cor_length_lat$p.value, digits = 3), "\n")
+  }
+  
+  if(all(c("Length_mm", "Globosity_WoverL") %in% names(data_df))) {
+    cor_length_shape <- cor.test(data_df$Length_mm, data_df$Globosity_WoverL, use = "complete.obs")
+    cat("Length ~ Globosity: r =", round(cor_length_shape$estimate, 4),
+        "p =", format.pval(cor_length_shape$p.value, digits = 3), "\n")
+  }
+  
+  return(cor_plot)
+}
+
+# ==============================================================================
+# 4. MAIN ANALYSIS PIPELINE
+# ==============================================================================
+
+run_analysis_pipeline <- function() {
+  
+  cat(paste0(rep("=", 60), collapse = ""), "\n")
+  cat("CALIFORNICONUS CALIFORNICUS MORPHOLOGY ANALYSIS\n")
+  cat("Bergmann's Rule across Pleistocene, Holocene, and Anthropocene\n")
+  cat(paste0(rep("=", 60), collapse = ""), "\n\n")
+  
+  # 1. Load and clean data
+  data_list <- load_and_clean_data()
+  Clean <- data_list$Clean
+  
+  cat("\n=== DATASET SUMMARY ===\n")
+  cat("Total specimens:", nrow(Clean), "\n")
+  
+  if("Epoch" %in% names(Clean)) {
+    cat("\nBy epoch:\n")
+    epoch_table <- table(Clean$Epoch)
+    print(epoch_table)
+  }
+  
+  if("Data_Type" %in% names(Clean)) {
+    cat("\nBy data type:\n")
+    data_type_table <- table(Clean$Data_Type)
+    print(data_type_table)
+  }
+  
+  # 2. Create maps
+  cat("\n=== CREATING VISUALIZATIONS ===\n")
+  maps <- create_simple_maps(Clean)
+  
+  # 3. Test assumptions
+  assumptions <- test_assumptions(Clean)
+  
+  # 4. Correlation analysis
+  cor_plot <- create_correlation_analysis(Clean)
+  
+  # 5. Bergmann's Rule analysis
+  bergmann_results <- analyze_bergmanns_rule(Clean)
+  
+  # 6. Generate summary statistics
+  cat("\n=== GENERATING SUMMARY STATISTICS ===\n")
+  
+  if(inherits(Clean, "sf")) {
+    Clean_df <- as.data.frame(Clean)
+    # Remove geometry column if it exists
+    if("geometry" %in% names(Clean_df)) {
+      Clean_df$geometry <- NULL
+    }
+  } else {
+    Clean_df <- Clean
+  }
+  
+  # Create summary by epoch
+  if("Epoch" %in% names(Clean_df) && "Length_mm" %in% names(Clean_df)) {
+    summary_stats <- data.frame()
+    
+    for(epoch in levels(Clean_df$Epoch)) {
+      epoch_data <- Clean_df %>% filter(Epoch == epoch)
+      
+      if(nrow(epoch_data) > 0) {
+        epoch_summary <- data.frame(
+          Epoch = epoch,
+          N = nrow(epoch_data),
+          Mean_Length = round(mean(epoch_data$Length_mm, na.rm = TRUE), 2),
+          SD_Length = round(sd(epoch_data$Length_mm, na.rm = TRUE), 2),
+          Min_Length = round(min(epoch_data$Length_mm, na.rm = TRUE), 2),
+          Max_Length = round(max(epoch_data$Length_mm, na.rm = TRUE), 2),
+          stringsAsFactors = FALSE
+        )
+        summary_stats <- rbind(summary_stats, epoch_summary)
+      }
+    }
+    
+    cat("\nSummary statistics by epoch:\n")
+    print(summary_stats)
+    
+    write.csv(summary_stats, "Summary_Statistics.csv", row.names = FALSE)
+    cat("\n✓ Summary statistics saved to: Summary_Statistics.csv\n")
+  }
+  
+  # 7. Create model comparison table
+  cat("\n=== CREATING MODEL COMPARISON ===\n")
+  
+  if(!is.null(bergmann_results)) {
+    
+    # Get sample sizes
+    n_pleistocene <- sum(Clean_df$Epoch == "Pleistocene", na.rm = TRUE)
+    n_holocene <- sum(Clean_df$Epoch == "Holocene", na.rm = TRUE)
+    n_anthropocene <- sum(Clean_df$Epoch == "Anthropocene", na.rm = TRUE)
+    
+    model_comparison <- data.frame(
+      Model = c("Length ~ Latitude (Overall)", 
+                "Length ~ Latitude * Epoch",
+                "Length ~ Latitude (Pleistocene)",
+                "Length ~ Latitude (Holocene)",
+                "Length ~ Latitude (Anthropocene)"),
+      n = c(
+        nrow(Clean_df),
+        nrow(Clean_df),
+        n_pleistocene,
+        n_holocene,
+        n_anthropocene
+      ),
+      Slope = c(
+        round(coef(bergmann_results$models$overall)[2], 4),
+        NA,
+        if("Pleistocene" %in% names(bergmann_results$models$epoch_specific)) 
+          round(coef(bergmann_results$models$epoch_specific$Pleistocene)[2], 4) else NA,
+        if("Holocene" %in% names(bergmann_results$models$epoch_specific)) 
+          round(coef(bergmann_results$models$epoch_specific$Holocene)[2], 4) else NA,
+        if("Anthropocene" %in% names(bergmann_results$models$epoch_specific)) 
+          round(coef(bergmann_results$models$epoch_specific$Anthropocene)[2], 4) else NA
+      ),
+      R_squared = c(
+        round(summary(bergmann_results$models$overall)$r.squared, 4),
+        round(summary(bergmann_results$models$epoch_interaction)$r.squared, 4),
+        if("Pleistocene" %in% names(bergmann_results$models$epoch_specific)) 
+          round(summary(bergmann_results$models$epoch_specific$Pleistocene)$r.squared, 4) else NA,
+        if("Holocene" %in% names(bergmann_results$models$epoch_specific)) 
+          round(summary(bergmann_results$models$epoch_specific$Holocene)$r.squared, 4) else NA,
+        if("Anthropocene" %in% names(bergmann_results$models$epoch_specific)) 
+          round(summary(bergmann_results$models$epoch_specific$Anthropocene)$r.squared, 4) else NA
+      ),
+      P_value = c(
+        format.pval(summary(bergmann_results$models$overall)$coefficients[2, 4], digits = 3),
+        if(!is.null(anova(bergmann_results$models$epoch_interaction))) 
+          format.pval(anova(bergmann_results$models$epoch_interaction)$`Pr(>F)`[1], digits = 3) else NA,
+        if("Pleistocene" %in% names(bergmann_results$models$epoch_specific)) 
+          format.pval(summary(bergmann_results$models$epoch_specific$Pleistocene)$coefficients[2, 4], digits = 3) else NA,
+        if("Holocene" %in% names(bergmann_results$models$epoch_specific)) 
+          format.pval(summary(bergmann_results$models$epoch_specific$Holocene)$coefficients[2, 4], digits = 3) else NA,
+        if("Anthropocene" %in% names(bergmann_results$models$epoch_specific)) 
+          format.pval(summary(bergmann_results$models$epoch_specific$Anthropocene)$coefficients[2, 4], digits = 3) else NA
+      ),
+      Supports_Bergmann = c(
+        ifelse(summary(bergmann_results$models$overall)$coefficients[2, 4] < 0.05, "Yes", "No"),
+        if(!is.null(anova(bergmann_results$models$epoch_interaction))) 
+          ifelse(anova(bergmann_results$models$epoch_interaction)$`Pr(>F)`[3] < 0.05, "Varies", "Consistent") else NA,
+        if("Pleistocene" %in% names(bergmann_results$models$epoch_specific)) 
+          ifelse(summary(bergmann_results$models$epoch_specific$Pleistocene)$coefficients[2, 4] < 0.05, "Yes", "No") else NA,
+        if("Holocene" %in% names(bergmann_results$models$epoch_specific)) 
+          ifelse(summary(bergmann_results$models$epoch_specific$Holocene)$coefficients[2, 4] < 0.05, "Yes", "No") else NA,
+        if("Anthropocene" %in% names(bergmann_results$models$epoch_specific)) 
+          ifelse(summary(bergmann_results$models$epoch_specific$Anthropocene)$coefficients[2, 4] < 0.05, "Yes", "No") else NA
+      )
+    )
+    
+    write.csv(model_comparison, "Model_Comparison.csv", row.names = FALSE)
+    cat("\n✓ Model comparison saved to: Model_Comparison.csv\n")
+    
+    # Print key findings
+    cat("\n=== KEY FINDINGS ===\n")
+    
+    overall_slope <- coef(bergmann_results$models$overall)[2]
+    overall_p <- summary(bergmann_results$models$overall)$coefficients[2, 4]
+    
+    if(overall_p < 0.05) {
+      cat(paste0("\n✓ BERGMANN'S RULE SUPPORTED: Shell length increases with latitude\n",
+                 "  Slope: ", round(overall_slope, 4), " mm per degree latitude\n",
+                 "  R²: ", round(summary(bergmann_results$models$overall)$r.squared, 3), "\n",
+                 "  p-value: ", format.pval(overall_p, digits = 3), "\n"))
+    } else {
+      cat("\n✗ BERGMANN'S RULE NOT SUPPORTED: No significant relationship with latitude\n")
+    }
+    
+    # Check epoch differences
+    if(!is.null(anova(bergmann_results$models$epoch_interaction))) {
+      epoch_p <- anova(bergmann_results$models$epoch_interaction)$`Pr(>F)`[3]
+      if(!is.na(epoch_p) && epoch_p < 0.05) {
+        cat("\n✓ EPOCH EFFECT: Relationship varies significantly between epochs\n")
+      } else if(!is.na(epoch_p)) {
+        cat("\n✗ NO EPOCH EFFECT: Relationship consistent across epochs\n")
+      }
+    }
+  }
+  
+  # Return results
+  results <- list(
+    data = Clean,
+    assumptions = assumptions,
+    bergmann = bergmann_results,
+    maps = maps,
+    correlation = cor_plot
+  )
+  
+  # Save results
+  saveRDS(results, "Analysis_Results.rds")
+  cat("\n✓ Complete analysis results saved to: Analysis_Results.rds\n")
+  
+  return(results)
+}
+
+# ==============================================================================
+# 5. EXECUTE ANALYSIS
+# ==============================================================================
+
+# Run the analysis
+cat("\n")
+cat(paste0(rep("=", 60), collapse = ""), "\n")
+cat("STARTING ANALYSIS\n")
+cat(paste0(rep("=", 60), collapse = ""), "\n\n")
+
+tryCatch({
+  results <- run_analysis_pipeline()
+  
+  cat("\n")
+  cat(paste0(rep("=", 60), collapse = ""), "\n")
+  cat("ANALYSIS COMPLETE!\n")
+  cat(paste0(rep("=", 60), collapse = ""), "\n\n")
+  
+  cat("Output files generated:\n")
+  cat("1. Data_Clean.csv - Cleaned dataset\n")
+  cat("2. Figure1_Collection_Maps.png - Collection location maps\n")
+  cat("3. Figure_Diagnostics.png - Diagnostic plots\n")
+  cat("4. Figure_Correlation_Matrix.png - Correlation matrix\n")
+  cat("5. Figure_Bergmanns_Rule.png - Bergmann's Rule visualization\n")
+  cat("6. Summary_Statistics.csv - Summary statistics\n")
+  cat("7. Model_Comparison.csv - Model comparison table\n")
+  cat("8. Analysis_Results.rds - Complete analysis results\n\n")
+  
+}, error = function(e) {
+  cat("\n")
+  cat(paste0(rep("=", 60), collapse = ""), "\n")
+  cat("ANALYSIS FAILED WITH ERROR:\n")
+  cat(e$message, "\n")
+  cat(paste0(rep("=", 60), collapse = ""), "\n\n")
+  
+  # Try to load pre-existing data files
+  cat("Attempting to load pre-existing data files...\n")
+  
+  if(file.exists("Data_Clean.csv")) {
+    cat("Loading Data_Clean.csv...\n")
+    Clean <- read.csv("Data_Clean.csv", stringsAsFactors = FALSE)
+    
+    # Run basic analyses on existing data
+    cat("Running basic analyses...\n")
+    
+    # Create simple correlation plot (compatible way)
+    numeric_cols <- sapply(Clean, is.numeric)
+    numeric_vars <- Clean[, numeric_cols, drop = FALSE]
+    
+    if(ncol(numeric_vars) >= 2) {
+      png("Figure_Correlation_Basic.png", width = 8, height = 8, units = "in", res = 300)
+      chart.Correlation(numeric_vars, histogram = TRUE, pch = 19)
+      dev.off()
+      cat("Basic correlation plot saved to: Figure_Correlation_Basic.png\n")
+    }
+    
+    # Check for Bergmann's Rule
+    if(all(c("Length_mm", "Latitude") %in% names(Clean))) {
+      lm_result <- lm(Length_mm ~ Latitude, data = Clean)
+      cat("\nBasic Bergmann's Rule analysis:\n")
+      cat("Slope:", round(coef(lm_result)[2], 4), "\n")
+      cat("R²:", round(summary(lm_result)$r.squared, 4), "\n")
+      cat("p-value:", format.pval(summary(lm_result)$coefficients[2, 4], digits = 3), "\n")
+    }
+  } else {
+    cat("No existing data files found.\n")
+  }
+})
+
+# Save workspace
+if(exists("results")) {
+  save.image("C_californicus_Analysis_Workspace.RData")
+  cat("Workspace saved to: C_californicus_Analysis_Workspace.RData\n")
+} else {
+  cat("No results to save.\n")
+}
+
+# Print session info
+cat("\n=== SESSION INFORMATION ===\n")
+print(sessionInfo())
+
+```
+
+Jan 14, 2026 
 Data integration and clean-up
 ```{r}
 # Data Integration Script for C. californicus Morphology Study
@@ -1353,7 +2344,7 @@ cat("\nSummary statistics saved to: Summary_Statistics.csv\n")
 cat("\n=== END OF ANALYSIS ===\n")
 ```
 
-
+Prior
 Data Clean-up        Post-processing: Raw -> Clean + SoCal       
 *Fig 1a-b            Map of C. californicus range                
 *Fig 2b              Shell allometry (Fig 2a of shell manual)             
