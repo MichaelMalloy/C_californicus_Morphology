@@ -1,35 +1,29 @@
 ---
 title: "Bergmann’s Rule across the Pleistocene, Holocene, and Anthropocene in an Eastern Pacific neogastropod, Californiconus californicus (Reeve, 1844) (Gastropoda: Conidae)"
 author: "Malloy and Ul-Hasan et al"
-date: "Feb 6, 2026"
+date: "Feb 19, 2026"
 output:
   pdf_document: default
 ---
 
-Last edited [Sabah Ul-Hasan]: Feb 6, 2026
+Last edited [Sabah Ul-Hasan]: Feb 19, 2026
 
 https://github.com/MichaelMalloy/C_californicus_Morphology
 
 Contributors of data by order of contribution: MM, SUH, SC, CAO, JKK, WFG
 Contributors of code by order of contribution: SUH, LL, MM, SS, CAO
 
-
-
 ```{r}
 
-# ==============================================================================
-# COMPLETE ANALYSIS SCRIPT FOR C. californicus MORPHOLOGY STUDY
-# Fixed for compatibility with older R versions
-# ==============================================================================
-
-# Install required packages
+# Install packages
+## Required packages
 required_packages <- c("tidyverse", "PerformanceAnalytics", "GGally", "cowplot",
                        "ggsignif", "ggpubr", "broom", "effectsize", "nlme",
                        "lme4", "mgcv", "MASS", "car", "lmtest", "boot",
                        "lubridate", "gridExtra", "RCurl", "emmeans", "pwr",
                        "sf", "ggspatial", "maps", "mapdata")
 
-# Function to safely install packages
+## Function to safely install packages
 install_if_missing <- function(packages) {
   for(pkg in packages) {
     if(!require(pkg, character.only = TRUE, quietly = TRUE)) {
@@ -39,10 +33,10 @@ install_if_missing <- function(packages) {
   }
 }
 
-# Install packages
+## Install 
 install_if_missing(required_packages)
 
-# Load packages
+## Load
 library(tidyverse)
 library(PerformanceAnalytics)
 library(GGally)
@@ -68,14 +62,11 @@ library(ggspatial)
 library(maps)
 library(mapdata)
 
-# Set seed for reproducibility
+# Set seed for reproducibility downstream
 set.seed(12345)
 
-# ==============================================================================
-# 1. DATA LOADING AND CLEANING
-# ==============================================================================
-
-# Function to load data from your specific GitHub structure
+# Data upload
+## Function to load data from your specific GitHub structure
 load_data_from_github <- function() {
   
   cat("=== LOADING DATA FROM GITHUB ===\n")
@@ -85,10 +76,10 @@ load_data_from_github <- function() {
   
   # List of files to load
   files <- list(
-    raw = "SupplementalTable2_Data-Raw.csv",
-    clean = "SupplementalTable3_Data-Clean.csv",
-    socal = "SupplementalTable4_Data-SoCal.csv",
-    key = "SupplementalTable1_Data-Key.csv",
+    raw = "data/SupplementalTable2_Data-Raw.csv",
+    clean = "data/SupplementalTable3_Data-Clean.csv",
+    socal = "data/SupplementalTable4_Data-SoCal.csv",
+    key = "data/SupplementalTable1_Data-Key.csv",
     inat_raw = "data/Data-iNat-Raw.csv",
     raw2 = "data/Data-Raw.csv"
   )
