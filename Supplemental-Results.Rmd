@@ -14,9 +14,11 @@ Contributors of data by order of contribution: MM, SUH, SC, CAO, JKK, WFG
 Contributors of code by order of contribution: SUH, LL, MM, SS, CAO
 
 - Make sure code below reflects figures and tables (work backwards from figures/tables in folder to code to formalize)
+- Update map to include iNat raw for natural history map (make sure no duplicates)
 - Compare in other models, and ask this one what prompt it would give to start from scratch
 - Need to bin islands by proximity to coast and each other
 - Why is Socal and Clean the same as Raw for rows?
+- Clean .RData and .Rapp.history in Github
 
 
 ```{r}
