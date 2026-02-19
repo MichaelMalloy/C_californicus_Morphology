@@ -1,0 +1,13 @@
+POWER ANALYSIS RESULTS
+======================
+
+Total sample size: 2824 
+
+Power to detect correlations:
+  Small effect (r = 0.1): 100% 
+  Medium effect (r = 0.3): 100% 
+  Minimum detectable r with 80% power: 0.053 
+
+RECOMMENDATIONS:
+  - Use non-parametric tests (Spearman correlation)
+  - Consider robust regression (MASS::rlm)

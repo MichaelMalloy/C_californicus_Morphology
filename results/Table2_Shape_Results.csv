@@ -1,0 +1,5 @@
+"Model","N","Rho","P_value","Significant"
+"Globosity ~ Latitude (Overall)",2824,0.1818,"<2e-16","Yes"
+"Globosity ~ Latitude (Pleistocene)",306,-0.2144,"0.000157","Yes"
+"Globosity ~ Latitude (Holocene)",1108,0.0692,"0.0212","Yes"
+"Globosity ~ Latitude (Anthropocene)",1410,0.2703,"<2e-16","Yes"

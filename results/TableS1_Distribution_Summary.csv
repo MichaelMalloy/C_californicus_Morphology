@@ -1,0 +1,4 @@
+"Variable","N","Mean","Median","SD","Skewness","Kurtosis","AD_p","Normal"
+"Length (mm)",2824,19.05,18.95,5.85,0.663,4.065,0,FALSE
+"Width (mm)",2824,10.89,10.7,3.23,0.66,3.962,0,FALSE
+"Globosity (W/L)",2824,0.58,0.58,0.04,-0.344,4.246,0,FALSE

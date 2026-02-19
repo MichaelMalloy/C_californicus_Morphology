@@ -1,6 +1,0 @@
-Model,n,Slope,R_squared,P_value,Supports_Bergmann
-Length ~ Latitude (Overall),3844,0.9811,0.0286,<2e-16,Yes
-Length ~ Latitude * Epoch,3844,NA,0.0387,<2e-16,Consistent
-Length ~ Latitude (Pleistocene),305,1.2548,0.0598,1.58e-05,Yes
-Length ~ Latitude (Holocene),1100,0.9911,0.0174,1.17e-05,Yes
-Length ~ Latitude (Anthropocene),2439,0.9014,0.0273,2.27e-16,Yes

@@ -1,0 +1,8 @@
+"Model","N","Slope","Rho","CI_lower","CI_upper","P_value","Supports_Bergmann"
+"Length ~ Latitude (Overall)",2824,NA,0.0413,0.0041,0.081,"0.0281","Yes"
+"Length ~ Latitude (Pleistocene)",306,NA,0.3146,NA,NA,"1.87e-08","Yes"
+"Length ~ Latitude (Holocene)",1108,NA,0.0141,NA,NA,"0.639","No"
+"Length ~ Latitude (Anthropocene)",1410,NA,0.0064,NA,NA,"0.81","No"
+"Length ~ Latitude * Epoch (Interaction)",2824,NA,NA,NA,NA,"0.542","Consistent"
+"SoCal - Coastal",1587,NA,-0.0783,NA,NA,"0.00181","Yes"
+"SoCal - Off Shore",950,NA,-0.0324,NA,NA,"0.318","No"
