@@ -1,0 +1,15 @@
+PRE-ANALYSIS DATA QUALITY REPORT
+================================
+
+DATA SUMMARY:
+  Total specimens (Clean): 2824 
+  By epoch: Pleistocene=306, Holocene=1108, Anthropocene=1410 
+
+NORMALITY ASSESSMENT:
+  Length: p = <2e-16  (NON-NORMAL) 
+  Width: p = <2e-16  (NON-NORMAL) 
+  Globosity: p = <2e-16  (NON-NORMAL) 
+
+RECOMMENDATIONS:
+  - Use Spearman correlation (non-parametric)
+  - Report effect sizes with confidence intervals

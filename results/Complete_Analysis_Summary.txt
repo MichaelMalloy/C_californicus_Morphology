@@ -1,0 +1,85 @@
+================================================================
+COMPLETE ANALYSIS SUMMARY: Californiconus californicus
+Testing Bergmann's Rule Across Pleistocene, Holocene, and Anthropocene
+================================================================
+
+DATA SUMMARY:
+  Raw data: 2996 specimens
+  Clean data: 2824 specimens
+  SoCal subset: 2537 
+
+By Epoch (Clean data):
+
+ Pleistocene     Holocene Anthropocene 
+         306         1108         1410 
+
+================================================================
+BERGMANN'S RULE RESULTS
+================================================================
+
+                                       Model    N Slope     Rho CI_lower CI_upper  P_value
+rho              Length ~ Latitude (Overall) 2824    NA  0.0413   0.0041    0.081   0.0281
+rho1         Length ~ Latitude (Pleistocene)  306    NA  0.3146       NA       NA 1.87e-08
+rho2            Length ~ Latitude (Holocene) 1108    NA  0.0141       NA       NA    0.639
+rho3        Length ~ Latitude (Anthropocene) 1410    NA  0.0064       NA       NA     0.81
+1    Length ~ Latitude * Epoch (Interaction) 2824    NA      NA       NA       NA    0.542
+rho4                         SoCal - Coastal 1587    NA -0.0783       NA       NA  0.00181
+rho5                       SoCal - Off Shore  950    NA -0.0324       NA       NA    0.318
+     Supports_Bergmann
+rho                Yes
+rho1               Yes
+rho2                No
+rho3                No
+1           Consistent
+rho4               Yes
+rho5                No
+
+================================================================
+SHELL SHAPE RESULTS
+================================================================
+
+                                   Model    N     Rho  P_value Significant
+rho       Globosity ~ Latitude (Overall) 2824  0.1818   <2e-16         Yes
+rho1  Globosity ~ Latitude (Pleistocene)  306 -0.2144 0.000157         Yes
+rho2     Globosity ~ Latitude (Holocene) 1108  0.0692   0.0212         Yes
+rho3 Globosity ~ Latitude (Anthropocene) 1410  0.2703   <2e-16         Yes
+
+================================================================
+VALIDATION
+================================================================
+
+Permutation test empirical p-value: 0.023 
+Observed effect is ROBUST to random chance
+
+================================================================
+OUTPUT FILES
+================================================================
+
+Data files:
+  data/Data-Raw-Reference.csv
+  data/Data_Clean.csv
+  data/Data_SoCal.csv
+  data/null/ - null datasets
+
+Results tables:
+  results/Table1_Bergmanns_Rule.csv
+  results/Table2_Shape_Results.csv
+  results/TableS1_Distribution_Summary.csv
+
+Figures:
+  results/figures/Map1_Raw_Distribution.png
+  results/figures/Map2_Clean_Distribution.png
+  results/figures/Map3_SoCal_Zoom_Density.png
+  results/figures/Figure1_Bergmanns_Rule.png
+  results/figures/Figure2_Shell_Shape.png
+  results/figures/Figure3_Epoch_Boxplots.png
+  results/figures/Figure4_Permutation_Validation.png
+
+Summaries:
+  results/summary/PreAnalysis_Summary.txt
+  results/summary/Power_Analysis_Results.txt
+  results/summary/Complete_Analysis_Summary.txt
+
+================================================================
+ANALYSIS COMPLETE
+================================================================
