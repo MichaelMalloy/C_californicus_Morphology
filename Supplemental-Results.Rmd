@@ -1,12 +1,12 @@
 ---
 title: "Bergmann’s Rule across the Pleistocene, Holocene, and Anthropocene in an Eastern Pacific neogastropod, Californiconus californicus (Reeve, 1844) (Gastropoda: Conidae)"
 author: "Malloy and Ul-Hasan et al"
-date: "Feb 19, 2026"
+date: "Mar 12, 2026"
 output:
   pdf_document: default
 ---
 
-Last edited [Sabah Ul-Hasan]: Feb 19, 2026
+Last edited [Sabah Ul-Hasan]: Mar 12, 2026
 
 https://github.com/MichaelMalloy/C_californicus_Morphology
 
@@ -19,6 +19,188 @@ Contributors of code by order of contribution: SUH, LL, MM, SS, CAO
 - Need to bin islands by proximity to coast and each other
 - Why is Socal and Clean the same as Raw for rows?
 - Clean .RData and .Rapp.history in Github
+
+
+```{r}
+
+##### Data Handling ##### 
+
+
+# Clean-up of Data-iNat-Raw.csv, ensure path match
+iNat <- read.csv("/Users/sulhasan/Downloads/C_californicus_Morphology/data/raw/Data_iNat-Raw.csv")
+## Function to check for non-NA, non-empty values
+has_values <- function(x) {
+  !is.na(x) && x != ""
+}
+## Initialize empty vectors to store row indices
+keep_rows <- c()
+remove_rows <- c()
+## Iterate through each row of the data frame
+for (i in 1:nrow(iNat)) {
+  # Check if both length and width have values
+  if (has_values(iNat$length[i]) && has_values(iNat$width[i])) {
+    keep_rows <- c(keep_rows, i)
+  } else {
+    remove_rows <- c(remove_rows, i)
+  }
+}
+## Create the subsetted data frame
+iNat_keep <- iNat[keep_rows, ]
+## Display results
+cat(paste("Rows kept:", length(keep_rows), "\n"))
+cat(paste("Rows removed:", length(remove_rows), "\n"))
+cat(paste("Percentage kept:", round(length(keep_rows)/nrow(iNat)*100, 1), "%\n"))
+## Create Globosity_WoverL column and remove length/width columns
+iNat_keep$Globosity_WoverL <- iNat_keep$width / iNat_keep$length
+iNat_keep <- iNat_keep[, !names(iNat_keep) %in% c("length", "width")]
+## Drop specified columns
+columns_to_drop <- c("species_name", "observation_license", "observer_login", 
+                     "observation_quality", "X")
+iNat_keep <- iNat_keep[, !names(iNat_keep) %in% columns_to_drop]
+## Rename columns
+rename_cols <- c("observation_id" = "Lot_Number", 
+                 "observer_login" = "Collector",
+                 "observation_latidude" = "Latitude", 
+                 "observation_longitude" = "Longitude")
+# Only rename columns that exist
+for (old_name in names(rename_cols)) {
+  if (old_name %in% names(iNat_keep)) {
+    names(iNat_keep)[names(iNat_keep) == old_name] <- rename_cols[old_name]
+  }
+}
+
+
+# Validation check of Globosity_WoverL between datasets
+Raw <- read.csv("/Users/sulhasan/Downloads/C_californicus_Morphology/data/raw/Data_Raw.csv")
+## Find common Lot_Numbers between the two datasets
+common_lot_numbers <- intersect(iNat_keep$Lot_Number, Raw$Lot_Number)
+
+if (length(common_lot_numbers) > 0) {
+  # Create dataframes with matching rows
+  iNat_matches <- iNat_keep[iNat_keep$Lot_Number %in% common_lot_numbers, ]
+  Raw_matches <- Raw[Raw$Lot_Number %in% common_lot_numbers, ]
+  # Merge datasets for comparison
+  comparison_df <- merge(
+    iNat_matches[, c("Lot_Number", "Globosity_WoverL")],
+    Raw_matches[, c("Lot_Number", "Globosity_WoverL")],
+    by = "Lot_Number",
+    suffixes = c("_iNat", "_Raw")
+  )
+  # Calculate differences
+  comparison_df$Difference <- comparison_df$Globosity_WoverL_iNat - comparison_df$Globosity_WoverL_Raw
+  comparison_df$Abs_Difference <- abs(comparison_df$Difference)
+  # Summary statistics
+  sd_diff <- sd(comparison_df$Difference)
+  mean_abs <- mean(comparison_df$Abs_Difference)
+  sd_abs <- sd(comparison_df$Abs_Difference)
+  cat("\n=== Globosity_WoverL Comparison ===\n")
+  cat(paste("Total matching Lot_Numbers:", nrow(comparison_df), "\n"))
+  cat(paste("Standard deviation of differences:", round(sd_diff, 6), "\n"))
+  cat(paste("Mean absolute difference:", round(mean_abs, 6), "\n"))
+  # Apply 1 SD threshold
+  threshold_1sd <- sd_diff
+  rows_to_keep <- comparison_df$Lot_Number[comparison_df$Abs_Difference <= threshold_1sd]
+  rows_to_remove <- comparison_df$Lot_Number[comparison_df$Abs_Difference > threshold_1sd]
+  cat("\n=== 1 Standard Deviation Filtering ===\n")
+  cat(paste("1 SD threshold:", round(threshold_1sd, 6), "\n"))
+  cat(paste("Rows within 1 SD:", length(rows_to_keep), 
+            "(", round(length(rows_to_keep)/nrow(comparison_df)*100, 1), "%)\n"))
+  cat(paste("Rows outside 1 SD:", length(rows_to_remove), 
+            "(", round(length(rows_to_remove)/nrow(comparison_df)*100, 1), "%)\n"))
+  # Show rows being removed
+  if (length(rows_to_remove) > 0) {
+    cat("\n=== Rows Removed (> 1 SD Difference) ===\n")
+    removed_rows <- comparison_df[comparison_df$Lot_Number %in% rows_to_remove, 
+                                  c("Lot_Number", "Globosity_WoverL_iNat", 
+                                    "Globosity_WoverL_Raw", "Difference", "Abs_Difference")]
+    print(removed_rows)
+  }
+  # Filter both datasets to keep only rows within 1 SD
+  iNat_keep <- iNat_keep[!iNat_keep$Lot_Number %in% rows_to_remove, ]
+  Raw <- Raw[!Raw$Lot_Number %in% rows_to_remove, ]
+  cat("\n=== Datasets Updated ===\n")
+  cat(paste("iNat_keep now has", nrow(iNat_keep), "rows\n"))
+  cat(paste("Raw now has", nrow(Raw), "rows\n"))
+} else {
+  cat("\nNo overlapping Lot_Numbers found between the two datasets.\n")
+}
+
+## Write and save usable data, ensure path
+write.csv(iNat_keep, "/Users/sulhasan/Downloads/C_californicus_Morphology/data/Data_iNat-Clean.csv", row.names = FALSE)
+write.csv(Raw, "/Users/sulhasan/Downloads/C_californicus_Morphology/data/Data_Raw-Filtered.csv", row.names = FALSE)
+
+# Merge of Data_iNat-Clean.csv into Data_Raw-Filtered.csv
+## Identify Lot_Numbers already in Raw_filtered
+existing_lot_numbers <- Raw$Lot_Number
+## Split iNat_clean into existing and new records
+iNat_existing <- iNat_keep[iNat_keep$Lot_Number %in% existing_lot_numbers, ]
+iNat_new <- iNat_keep[!iNat_keep$Lot_Number %in% existing_lot_numbers, ]
+
+cat("\n=== Data Integration ===\n")
+cat(paste("Records already in Raw_filtered:", nrow(iNat_existing), "\n"))
+cat(paste("New records to add:", nrow(iNat_new), "\n"))
+
+## For new records, create new rows for Raw
+if (nrow(iNat_new) > 0) {
+  # Create a template dataframe with all Raw columns
+  new_rows <- data.frame(matrix(NA, nrow = nrow(iNat_new), ncol = ncol(Raw)))
+  colnames(new_rows) <- colnames(Raw)
+  # Fill in basic information from iNat_new
+  new_rows$Collection <- "iNat"
+  new_rows$Lot_Number <- as.character(iNat_new$Lot_Number)
+  new_rows$Latitude <- iNat_new$Latitude
+  new_rows$Longitude <- iNat_new$Longitude
+  new_rows$Globosity_WoverL <- iNat_new$Globosity_WoverL
+  # Extract date components from observation_date
+  # Note: observation_date is in format "m/d/yy" or "m/d/yyyy"
+  date_parts <- strsplit(as.character(iNat_new$observation_date), "/")
+  new_rows$Month <- as.numeric(sapply(date_parts, function(x) x[1]))
+  new_rows$Year <- as.numeric(sapply(date_parts, function(x) {
+    year_val <- x[3]
+    if (nchar(year_val) == 2) {
+      # Convert 2-digit year to 4-digit (assuming 2000+ for years < 50, 1900+ for years >= 50)
+      if (as.numeric(year_val) < 50) {
+        return(2000 + as.numeric(year_val))
+      } else {
+        return(1900 + as.numeric(year_val))
+      }
+    } else {
+      return(as.numeric(year_val))
+    }
+  }))
+  # Determine season based on month
+  new_rows$Season <- ifelse(new_rows$Month %in% c(12, 1, 2), "Winter",
+                          ifelse(new_rows$Month %in% c(3, 4, 5), "Spring",
+                          ifelse(new_rows$Month %in% c(6, 7, 8), "Summer", "Fall")))
+  # Set Decade based on Year
+  new_rows$Decade <- floor(new_rows$Year / 10) * 10
+  # Set Epoch (assuming all recent are Anthropocene)
+  new_rows$Epoch <- "Anthropocene"
+  # Set Formation as NA
+  new_rows$Formation <- NA
+  # Set environmental data as NA (to be filled later)
+  new_rows$Mean_SST <- NA
+  new_rows$Mean_SST_Sdev <- NA
+  # Append new rows to Raw
+  Raw <- rbind(Raw, new_rows)
+}
+## Sort by Lot_Number (assuming numeric conversion)
+# Convert Lot_Number to character for sorting
+Raw$Lot_Number <- as.character(Raw$Lot_Number)
+# Extract numeric part for sorting
+Raw$sort_key <- as.numeric(gsub("[^0-9]", "", Raw$Lot_Number))
+Raw <- Raw[order(Raw$sort_key, Raw$Lot_Number), ]
+Raw$sort_key <- NULL
+
+## Save the updated dataset
+write.csv(Raw, 
+          "/Users/sulhasan/Downloads/C_californicus_Morphology/data/Data_Raw-Integrated.csv", 
+          row.names = FALSE)
+
+##### Data Handling ##### 
+```
+
+
 
 
 ```{r}
