@@ -1,46 +1,22 @@
 ---
-<<<<<<< HEAD
-title: "Bergmann’s Rule and Cope’s Rule across the Pleistocene, Holocene, and Anthropocene in an Eastern Pacific gastropod, Californiconus californicus"
-author: "Malloy and Ul-Hasan et al"
-date: "Oct 22, 2019"
-=======
 title: "Bergmann’s Rule across the Pleistocene, Holocene, and Anthropocene in an Eastern Pacific neogastropod, Californiconus californicus (Reeve, 1844) (Gastropoda: Conidae)"
 author: "Malloy and Ul-Hasan et al"
-date: "Mar 12, 2026"
->>>>>>> main
+date: "Mar 14, 2026"
 output:
   pdf_document: default
 ---
 
-<<<<<<< HEAD
-Last edited [Sabah Ul-Hasan]: Oct 22, 2019
-=======
-Last edited [Sabah Ul-Hasan]: Mar 12, 2026
->>>>>>> main
-
+Last edited [Sabah Ul-Hasan]: Mar 14, 2026
 https://github.com/MichaelMalloy/C_californicus_Morphology
 
 Contributors of data by order of contribution: MM, SUH, SC, CAO, JKK, WFG
-<<<<<<< HEAD
-Contributors of code by order of contribution: SUH, LL, MM, SS
-
-Data Clean-up       Post-processing: Raw -> Clean -> SoCal      Lines 25 - 154
-Fig 1a-b            Map of C. californicus range                Lines 156 - 272
-Fig 2b              Shell allometry (shell manual)              Lines 274 - 329
-Fig 3a-d,Supp Fig 1 Size or Shape and Lat / Temp, Bergmann's    Lines 331 - 483
-Fig 4a-f,Supp Fig 2 Size or Shape and Ecoregion + Proxmity      Lines 475 - 630
-Tables 1-2          Statistics breakdown (of all figures)       Lines 632 - 702
-Supp Fig 3          Correlations to human population density    Lines 704 - 769
-Cope's Rule         Size by location ~ Epoch                    Lines 771 - 
-=======
 Contributors of code by order of contribution: SUH, LL, MM, SS, CAO
 
-- Make sure code below reflects figures and tables (work backwards from figures/tables in folder to code to formalize)
-- Update map to include iNat raw for natural history map (make sure no duplicates)
-- Compare in other models, and ask this one what prompt it would give to start from scratch
-- Need to bin islands by proximity to coast and each other
-- Why is Socal and Clean the same as Raw for rows?
-- Clean .RData and .Rapp.history in Github
+iNat: 
+# Include dead or alive?
+# Address NA columns (location columns, SST, zooplankton etc)
+# Habitat	Depth	BRY	BAR	LMP	TWS	COR	ALG	SCR	BOR_TAP	BOR_STR	BOR_INC
+
 
 
 ```{r}
@@ -76,7 +52,7 @@ cat(paste("Percentage kept:", round(length(keep_rows)/nrow(iNat)*100, 1), "%\n")
 iNat_keep$Globosity_WoverL <- iNat_keep$width / iNat_keep$length
 iNat_keep <- iNat_keep[, !names(iNat_keep) %in% c("length", "width")]
 ## Drop specified columns
-columns_to_drop <- c("species_name", "observation_license", "observer_login", 
+columns_to_drop <- c("species_name", "observation_license", 
                      "observation_quality", "X")
 iNat_keep <- iNat_keep[, !names(iNat_keep) %in% columns_to_drop]
 ## Rename columns
@@ -118,7 +94,6 @@ if (length(common_lot_numbers) > 0) {
   cat("\n=== Globosity_WoverL Comparison ===\n")
   cat(paste("Total matching Lot_Numbers:", nrow(comparison_df), "\n"))
   cat(paste("Standard deviation of differences:", round(sd_diff, 6), "\n"))
-  cat(paste("Mean absolute difference:", round(mean_abs, 6), "\n"))
   # Apply 1 SD threshold
   threshold_1sd <- sd_diff
   rows_to_keep <- comparison_df$Lot_Number[comparison_df$Abs_Difference <= threshold_1sd]
@@ -129,58 +104,114 @@ if (length(common_lot_numbers) > 0) {
             "(", round(length(rows_to_keep)/nrow(comparison_df)*100, 1), "%)\n"))
   cat(paste("Rows outside 1 SD:", length(rows_to_remove), 
             "(", round(length(rows_to_remove)/nrow(comparison_df)*100, 1), "%)\n"))
-  # Show rows being removed
-  if (length(rows_to_remove) > 0) {
-    cat("\n=== Rows Removed (> 1 SD Difference) ===\n")
-    removed_rows <- comparison_df[comparison_df$Lot_Number %in% rows_to_remove, 
-                                  c("Lot_Number", "Globosity_WoverL_iNat", 
-                                    "Globosity_WoverL_Raw", "Difference", "Abs_Difference")]
-    print(removed_rows)
-  }
+  # Store original row counts before filtering
+  iNat_before <- nrow(iNat_keep)
+  Raw_before <- nrow(Raw)
   # Filter both datasets to keep only rows within 1 SD
   iNat_keep <- iNat_keep[!iNat_keep$Lot_Number %in% rows_to_remove, ]
   Raw <- Raw[!Raw$Lot_Number %in% rows_to_remove, ]
   cat("\n=== Datasets Updated ===\n")
-  cat(paste("iNat_keep now has", nrow(iNat_keep), "rows\n"))
-  cat(paste("Raw now has", nrow(Raw), "rows\n"))
+  cat(paste("iNat_keep: from", iNat_before, "to", nrow(iNat_keep), 
+            "rows (removed", iNat_before - nrow(iNat_keep), ")\n"))
+  cat(paste("Raw: from", Raw_before, "to", nrow(Raw), 
+            "rows (removed", Raw_before - nrow(Raw), ")\n"))
+  ## Create comprehensive comparison dataset (moved inside the if statement)
+  # Merge full datasets for all matching Lot_Numbers
+  full_comparison <- merge(
+    iNat_matches[, c("Lot_Number", "observation_date", "Latitude", "Longitude", 
+                     "observation_type_0dead", "Globosity_WoverL")],
+    Raw_matches[, c("Lot_Number", "Collection", "Ecoregion", "County", "Year", "Month", 
+                    "Season", "Globosity_WoverL")],
+    by = "Lot_Number",
+    suffixes = c("_iNat", "_Raw"),
+    all = TRUE
+  )
+  # Calculate difference and flag if within 1 SD
+  full_comparison$Difference <- full_comparison$Globosity_WoverL_iNat - full_comparison$Globosity_WoverL_Raw
+  full_comparison$Abs_Difference <- abs(full_comparison$Difference)
+  full_comparison$Within_1SD <- full_comparison$Abs_Difference <= sd_diff
+  # Add status column
+  full_comparison$Status <- ifelse(full_comparison$Within_1SD, "Match", "Mismatch")
+  # Sort by absolute difference (largest mismatches first)
+  full_comparison <- full_comparison[order(-full_comparison$Abs_Difference), ]
+  # Save comprehensive comparison
+  write.csv(full_comparison, 
+            "/Users/sulhasan/Downloads/C_californicus_Morphology/data/Data_iNat-OverlapValidation.csv", 
+            row.names = FALSE)
+  cat("\nComprehensive comparison saved as: Data_iNat-OverlapValidation.csv\n")
 } else {
   cat("\nNo overlapping Lot_Numbers found between the two datasets.\n")
 }
 
+
+# Merge of Data_iNat-Clean.csv into Data_Raw-Filtered.csv
 ## Write and save usable data, ensure path
 write.csv(iNat_keep, "/Users/sulhasan/Downloads/C_californicus_Morphology/data/Data_iNat-Clean.csv", row.names = FALSE)
 write.csv(Raw, "/Users/sulhasan/Downloads/C_californicus_Morphology/data/Data_Raw-Filtered.csv", row.names = FALSE)
 
-# Merge of Data_iNat-Clean.csv into Data_Raw-Filtered.csv
 ## Identify Lot_Numbers already in Raw_filtered
 existing_lot_numbers <- Raw$Lot_Number
 ## Split iNat_clean into existing and new records
 iNat_existing <- iNat_keep[iNat_keep$Lot_Number %in% existing_lot_numbers, ]
 iNat_new <- iNat_keep[!iNat_keep$Lot_Number %in% existing_lot_numbers, ]
-
 cat("\n=== Data Integration ===\n")
 cat(paste("Records already in Raw_filtered:", nrow(iNat_existing), "\n"))
 cat(paste("New records to add:", nrow(iNat_new), "\n"))
-
 ## For new records, create new rows for Raw
 if (nrow(iNat_new) > 0) {
+  # Step 1: Ensure Latitude and Longitude are numeric
+  iNat_new$Latitude <- as.numeric(as.character(iNat_new$Latitude))
+  iNat_new$Longitude <- as.numeric(as.character(iNat_new$Longitude))
+  # Step 2: Determine starting Specimen_Number
+  # Find the maximum existing Specimen_Number
+  max_specimen <- max(as.numeric(Raw$Specimen_Number[!is.na(Raw$Specimen_Number)]), na.rm = TRUE)
+  if (is.infinite(max_specimen)) max_specimen <- 2996  # Start from 2997 if no existing numbers
+  # Step 3: Create a temporary copy of Raw with rounded coordinates for lookup
+  Raw_temp <- Raw
+  Raw_temp$Latitude <- as.numeric(as.character(Raw_temp$Latitude))
+  Raw_temp$Longitude <- as.numeric(as.character(Raw_temp$Longitude))
+  # Round coordinates in Raw_temp to 2 decimal places for matching
+  Raw_temp$Latitude_rounded <- round(Raw_temp$Latitude, 2)
+  Raw_temp$Longitude_rounded <- round(Raw_temp$Longitude, 2)
+  # Create lookup tables for location-based matching using rounded coordinates
+  location_cols <- c("Latitude_rounded", "Longitude_rounded", "Ecoregion", "County", 
+                     "Coastal_Proximity", "Location", "Site", "SoCal_Group", "Island_Size")
+  # Get unique location combinations from Raw_temp
+  location_lookup <- unique(Raw_temp[, location_cols])
+  location_lookup <- location_lookup[complete.cases(location_lookup[, c("Latitude_rounded", "Longitude_rounded")]), ]
+  # For SST data - match based on Year, Season, AND Month
+  sst_cols <- c("Year", "Season", "Month", "Mean_SST", "Mean_SST_Sdev")
+  sst_lookup <- unique(Raw[, sst_cols])
+  sst_lookup <- sst_lookup[complete.cases(sst_lookup[, c("Year", "Season", "Month", "Mean_SST")]), ]
+  # Step 4: Create lookup for environmental and fisheries columns
+  # These columns will be matched by rounded Latitude/Longitude AND Year
+  env_cols <- c("Latitude_rounded", "Longitude_rounded", "Year",
+                "mean_pvolc3", "sd_pvolc3", 
+                "zooplankton_n_points_used", "zooplankton_mean_distance",
+                "fish_total_catch_wt_kg", "fish_cpue_kg_per_ha_der",
+                "sd_total_catch_wt_kg", "sd_cpue_kg_per_ha_der",
+                "fish_n_points_used", "fish_mean_distance",
+                "Population_Density", "Population_Density_NoBaja", "MPA")
+  # Create lookup table with unique combinations
+  env_lookup <- unique(Raw_temp[, env_cols])
+  env_lookup <- env_lookup[complete.cases(env_lookup[, c("Latitude_rounded", "Longitude_rounded", "Year")]), ]
   # Create a template dataframe with all Raw columns
   new_rows <- data.frame(matrix(NA, nrow = nrow(iNat_new), ncol = ncol(Raw)))
   colnames(new_rows) <- colnames(Raw)
-  # Fill in basic information from iNat_new
+  # Fill in basic information from iNat_new - but with coordinates rounded to 2 decimals
+  new_rows$Specimen_Number <- max_specimen + 1:nrow(iNat_new)
   new_rows$Collection <- "iNat"
   new_rows$Lot_Number <- as.character(iNat_new$Lot_Number)
-  new_rows$Latitude <- iNat_new$Latitude
-  new_rows$Longitude <- iNat_new$Longitude
+  new_rows$Collector <- iNat_new$Collector  # Collector already exists in iNat_keep
+  new_rows$Latitude <- round(iNat_new$Latitude, 2)  # Round to 2 decimal places
+  new_rows$Longitude <- round(iNat_new$Longitude, 2)  # Round to 2 decimal places
   new_rows$Globosity_WoverL <- iNat_new$Globosity_WoverL
   # Extract date components from observation_date
-  # Note: observation_date is in format "m/d/yy" or "m/d/yyyy"
   date_parts <- strsplit(as.character(iNat_new$observation_date), "/")
   new_rows$Month <- as.numeric(sapply(date_parts, function(x) x[1]))
   new_rows$Year <- as.numeric(sapply(date_parts, function(x) {
     year_val <- x[3]
     if (nchar(year_val) == 2) {
-      # Convert 2-digit year to 4-digit (assuming 2000+ for years < 50, 1900+ for years >= 50)
       if (as.numeric(year_val) < 50) {
         return(2000 + as.numeric(year_val))
       } else {
@@ -200,29 +231,171 @@ if (nrow(iNat_new) > 0) {
   new_rows$Epoch <- "Anthropocene"
   # Set Formation as NA
   new_rows$Formation <- NA
-  # Set environmental data as NA (to be filled later)
-  new_rows$Mean_SST <- NA
-  new_rows$Mean_SST_Sdev <- NA
+  # Step 5: Create rounded versions for matching (these will be discarded later)
+  new_rows$Latitude_rounded <- new_rows$Latitude  # Already rounded
+  new_rows$Longitude_rounded <- new_rows$Longitude  # Already rounded
+  # Step 6: Match location-based columns by rounded Latitude/Longitude
+  cat("\n=== Matching Location Data ===\n")
+  location_match_count <- 0
+  for (i in 1:nrow(new_rows)) {
+    # Skip if coordinates are NA
+    if (is.na(new_rows$Latitude_rounded[i]) || is.na(new_rows$Longitude_rounded[i])) {
+      next
+    }
+    # Find matching rounded coordinates in location_lookup
+    coord_match <- which(abs(location_lookup$Latitude_rounded - new_rows$Latitude_rounded[i]) < 0.01 & 
+                         abs(location_lookup$Longitude_rounded - new_rows$Longitude_rounded[i]) < 0.01)
+    if (length(coord_match) > 0) {
+      # Use the first match if multiple
+      match_idx <- coord_match[1]
+      new_rows$Ecoregion[i] <- location_lookup$Ecoregion[match_idx]
+      new_rows$County[i] <- location_lookup$County[match_idx]
+      new_rows$Coastal_Proximity[i] <- location_lookup$Coastal_Proximity[match_idx]
+      new_rows$Location[i] <- location_lookup$Location[match_idx]
+      new_rows$Site[i] <- location_lookup$Site[match_idx]
+      new_rows$SoCal_Group[i] <- location_lookup$SoCal_Group[match_idx]
+      new_rows$Island_Size[i] <- location_lookup$Island_Size[match_idx]
+      location_match_count <- location_match_count + 1
+    }
+  }
+  cat(paste("Location data matched for", location_match_count, "out of", nrow(new_rows), "records\n"))
+  # Step 7: Match SST data by Year AND Season AND Month
+  cat("\n=== Matching SST Data ===\n")
+  sst_match_count <- 0
+  for (i in 1:nrow(new_rows)) {
+    # Skip if temporal data is missing
+    if (is.na(new_rows$Year[i]) || is.na(new_rows$Season[i]) || is.na(new_rows$Month[i])) {
+      next
+    }
+    # Find matching year, season, and month
+    year_match <- new_rows$Year[i]
+    season_match <- new_rows$Season[i]
+    month_match <- new_rows$Month[i]
+    # Find exact match for year, season, and month
+    match_idx <- which(sst_lookup$Year == year_match & 
+                       sst_lookup$Season == season_match & 
+                       sst_lookup$Month == month_match)
+    
+    if (length(match_idx) > 0) {
+      # Use the first match if multiple
+      idx <- match_idx[1]
+      new_rows$Mean_SST[i] <- sst_lookup$Mean_SST[idx]
+      new_rows$Mean_SST_Sdev[i] <- sst_lookup$Mean_SST_Sdev[idx]
+      sst_match_count <- sst_match_count + 1
+    } else {
+      # If no exact match, try matching by year and season only (as fallback)
+      fallback_idx <- which(sst_lookup$Year == year_match & 
+                           sst_lookup$Season == season_match)
+      if (length(fallback_idx) > 0) {
+        idx <- fallback_idx[1]
+        new_rows$Mean_SST[i] <- sst_lookup$Mean_SST[idx]
+        new_rows$Mean_SST_Sdev[i] <- sst_lookup$Mean_SST_Sdev[idx]
+        sst_match_count <- sst_match_count + 1
+      }
+    }
+  }
+  cat(paste("SST data matched for", sst_match_count, "out of", nrow(new_rows), "records\n"))
+  # Step 8: Match environmental and fisheries data by rounded coordinates AND Year
+  cat("\n=== Matching Environmental & Fisheries Data ===\n")
+  env_match_count <- 0
+  for (i in 1:nrow(new_rows)) {
+    # Skip if coordinates or year are missing
+    if (is.na(new_rows$Latitude_rounded[i]) || is.na(new_rows$Longitude_rounded[i]) || is.na(new_rows$Year[i])) {
+      next
+    }
+    # Find matches by rounded coordinates AND year
+    env_match <- which(abs(env_lookup$Latitude_rounded - new_rows$Latitude_rounded[i]) < 0.01 & 
+                       abs(env_lookup$Longitude_rounded - new_rows$Longitude_rounded[i]) < 0.01 &
+                       env_lookup$Year == new_rows$Year[i])
+    
+    if (length(env_match) > 0) {
+      # Use the first match if multiple
+      match_idx <- env_match[1]
+      # Fill in all environmental and fisheries columns
+      new_rows$mean_pvolc3[i] <- env_lookup$mean_pvolc3[match_idx]
+      new_rows$sd_pvolc3[i] <- env_lookup$sd_pvolc3[match_idx]
+      new_rows$zooplankton_n_points_used[i] <- env_lookup$zooplankton_n_points_used[match_idx]
+      new_rows$zooplankton_mean_distance[i] <- env_lookup$zooplankton_mean_distance[match_idx]
+      new_rows$fish_total_catch_wt_kg[i] <- env_lookup$fish_total_catch_wt_kg[match_idx]
+      new_rows$fish_cpue_kg_per_ha_der[i] <- env_lookup$fish_cpue_kg_per_ha_der[match_idx]
+      new_rows$sd_total_catch_wt_kg[i] <- env_lookup$sd_total_catch_wt_kg[match_idx]
+      new_rows$sd_cpue_kg_per_ha_der[i] <- env_lookup$sd_cpue_kg_per_ha_der[match_idx]
+      new_rows$fish_n_points_used[i] <- env_lookup$fish_n_points_used[match_idx]
+      new_rows$fish_mean_distance[i] <- env_lookup$fish_mean_distance[match_idx]
+      new_rows$Population_Density[i] <- env_lookup$Population_Density[match_idx]
+      new_rows$Population_Density_NoBaja[i] <- env_lookup$Population_Density_NoBaja[match_idx]
+      new_rows$MPA[i] <- env_lookup$MPA[match_idx]
+      
+      env_match_count <- env_match_count + 1
+    } else {
+      # Fallback: try matching by coordinates only (any year)
+      coord_only_match <- which(abs(env_lookup$Latitude_rounded - new_rows$Latitude_rounded[i]) < 0.01 & 
+                                abs(env_lookup$Longitude_rounded - new_rows$Longitude_rounded[i]) < 0.01)
+      
+      if (length(coord_only_match) > 0) {
+        match_idx <- coord_only_match[1]
+        
+        new_rows$mean_pvolc3[i] <- env_lookup$mean_pvolc3[match_idx]
+        new_rows$sd_pvolc3[i] <- env_lookup$sd_pvolc3[match_idx]
+        new_rows$zooplankton_n_points_used[i] <- env_lookup$zooplankton_n_points_used[match_idx]
+        new_rows$zooplankton_mean_distance[i] <- env_lookup$zooplankton_mean_distance[match_idx]
+        new_rows$fish_total_catch_wt_kg[i] <- env_lookup$fish_total_catch_wt_kg[match_idx]
+        new_rows$fish_cpue_kg_per_ha_der[i] <- env_lookup$fish_cpue_kg_per_ha_der[match_idx]
+        new_rows$sd_total_catch_wt_kg[i] <- env_lookup$sd_total_catch_wt_kg[match_idx]
+        new_rows$sd_cpue_kg_per_ha_der[i] <- env_lookup$sd_cpue_kg_per_ha_der[match_idx]
+        new_rows$fish_n_points_used[i] <- env_lookup$fish_n_points_used[match_idx]
+        new_rows$fish_mean_distance[i] <- env_lookup$fish_mean_distance[match_idx]
+        new_rows$Population_Density[i] <- env_lookup$Population_Density[match_idx]
+        new_rows$Population_Density_NoBaja[i] <- env_lookup$Population_Density_NoBaja[match_idx]
+        new_rows$MPA[i] <- env_lookup$MPA[match_idx]
+        
+        env_match_count <- env_match_count + 1
+      }
+    }
+  }
+  
+  cat(paste("Environmental/fisheries data matched for", env_match_count, "out of", nrow(new_rows), "records\n"))
+  # Remove temporary rounded coordinate columns before appending
+  new_rows$Latitude_rounded <- NULL
+  new_rows$Longitude_rounded <- NULL
   # Append new rows to Raw
   Raw <- rbind(Raw, new_rows)
+  cat("\n=== New Records Added ===\n")
+  cat(paste("Assigned Specimen_Numbers:", min(new_rows$Specimen_Number), "to", max(new_rows$Specimen_Number), "\n"))
 }
-## Sort by Lot_Number (assuming numeric conversion)
-# Convert Lot_Number to character for sorting
-Raw$Lot_Number <- as.character(Raw$Lot_Number)
-# Extract numeric part for sorting
-Raw$sort_key <- as.numeric(gsub("[^0-9]", "", Raw$Lot_Number))
-Raw <- Raw[order(Raw$sort_key, Raw$Lot_Number), ]
-Raw$sort_key <- NULL
-
+## Round all coordinates in the entire Raw dataset to 2 decimal places for consistency
+Raw$Latitude <- round(as.numeric(as.character(Raw$Latitude)), 2)
+Raw$Longitude <- round(as.numeric(as.character(Raw$Longitude)), 2)
+## Sort by Specimen_Number (smallest to largest)
+Raw$Specimen_Number <- as.numeric(as.character(Raw$Specimen_Number))
+Raw <- Raw[order(Raw$Specimen_Number), ]
 ## Save the updated dataset
 write.csv(Raw, 
           "/Users/sulhasan/Downloads/C_californicus_Morphology/data/Data_Raw-Integrated.csv", 
           row.names = FALSE)
+cat(paste("Final integrated dataset has", nrow(Raw), "rows\n"))
+cat("Saved as: Data_Raw-Integrated.csv\n")
+
 
 ##### Data Handling ##### 
 ```
 
+later
 
+Data Clean-up       Post-processing: Raw -> Clean -> SoCal      Lines 25 - 154
+Fig 1a-b            Map of C. californicus range                Lines 156 - 272
+Fig 2b              Shell allometry (shell manual)              Lines 274 - 329
+Fig 3a-d,Supp Fig 1 Size or Shape and Lat / Temp, Bergmann's    Lines 331 - 483
+Fig 4a-f,Supp Fig 2 Size or Shape and Ecoregion + Proxmity      Lines 475 - 630
+Tables 1-2          Statistics breakdown (of all figures)       Lines 632 - 702
+Supp Fig 3          Correlations to human population density    Lines 704 - 769
+Cope's Rule         Size by location ~ Epoch                    Lines 771 - 
+
+- Make sure code below reflects figures and tables (work backwards from figures/tables in folder to code to formalize)
+- Update map to include iNat raw for natural history map (make sure no duplicates)
+- Compare in other models, and ask this one what prompt it would give to start from scratch
+- Need to bin islands by proximity to coast and each other
+- Why is Socal and Clean the same as Raw for rows?
 
 
 ```{r}
